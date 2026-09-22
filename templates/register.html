@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create Account | Priority Planner</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .card { background: #1e293b; padding: 2.5rem; border-radius: 12px; width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); border: 1px solid #334155; }
+    h2 { margin-top: 0; font-size: 1.4rem; color: #38bdf8; }
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.35rem; color: #cbd5e1; }
+    input { width: 100%; box-sizing: border-box; padding: 0.65rem; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; }
+    .btn { width: 100%; padding: 0.75rem; border-radius: 6px; background: #0284c7; color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 0.5rem; }
+    .flashes { color: #f87171; font-size: 0.8rem; margin-bottom: 1rem; }
+    .links { text-align: center; margin-top: 1rem; font-size: 0.8rem; }
+    .links a { color: #38bdf8; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Create an Account</h2>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}<div class="flashes">{{ messages[0] }}</div>{% endif %}
+    {% endwith %}
+    <form method="POST">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" required>
+      </div>
+      <div class="form-group">
+        <label>Email (for password recovery)</label>
+        <input type="email" name="email" required>
+      </div>
+      <div class="form-group">
+        <label>Password (Encrypted & Hashed)</label>
+        <input type="password" name="password" required>
+      </div>
+      <button type="submit" class="btn">Register & Continue</button>
+    </form>
+    <div class="links">Already registered? <a href="/login">Log In</a></div>
+  </div>
+</body>
+</html>
