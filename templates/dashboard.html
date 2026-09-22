@@ -2,13 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Priority Timetable & Execution Dashboard</title>
+  <title>Priority Execution Dashboard</title>
   <style>
     :root {
       --bg: #f8fafc;
       --card-bg: #ffffff;
+      --sidebar-bg: #ffffff;
       --text: #0f172a;
-      --border: #cbd5e1;
+      --border: #e2e8f0;
+      --primary: #0284c7;
     }
     * { box-sizing: border-box; }
     body {
@@ -16,244 +18,277 @@
       background: var(--bg);
       color: var(--text);
       margin: 0;
-      padding: 1.5rem;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
     }
-    header {
+
+    /* Left Sidebar */
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .brand { font-size: 1.15rem; font-weight: bold; color: var(--primary); margin-bottom: 0.25rem; }
+    .user-tag { font-size: 0.75rem; color: #64748b; margin-bottom: 1.5rem; display: flex; justify-content: space-between; }
+    .user-tag a { color: #dc2626; text-decoration: none; }
+
+    .panel-title { font-size: 0.85rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 0.85rem; }
+    .form-group { margin-bottom: 0.85rem; }
+    .form-group label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.3rem; color: #334155; }
+    .form-group input, .form-group select { width: 100%; padding: 0.5rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+    .btn-create { width: 100%; background: var(--primary); color: white; border: none; padding: 0.65rem; border-radius: 6px; font-weight: bold; font-size: 0.85rem; cursor: pointer; margin-top: 0.5rem; }
+    .btn-create:hover { background: #0369a1; }
+
+    /* Main Planner Grid */
+    .main-content {
+      flex: 1;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .top-nav {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
-      border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 0.75rem;
     }
-    h1 { font-size: 1.5rem; margin: 0; }
-    
-    /* Metrics Bar */
-    .metrics-bar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .metric-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .metric-title { font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: bold; }
-    .metric-value { font-size: 1.5rem; font-weight: bold; margin-top: 0.25rem; }
+    .week-nav { display: flex; align-items: center; gap: 0.5rem; }
+    .nav-btn { background: #fff; border: 1px solid var(--border); padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.8rem; text-decoration: none; color: #334155; font-weight: 600; }
+    .nav-btn:hover { background: #f1f5f9; }
+    .week-title { font-size: 0.95rem; font-weight: bold; }
 
-    /* Priority Key Bar */
-    .legend-container {
-      background: var(--card-bg);
+    /* Legend */
+    .legend-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      background: #fff;
+      padding: 0.6rem 0.85rem;
+      border-radius: 6px;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 1.5rem;
+      align-items: center;
     }
-    .legend-title { font-weight: bold; font-size: 0.85rem; margin-bottom: 0.5rem; }
-    .legend-items { display: flex; flex-wrap: wrap; gap: 1rem; }
-    .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
-    .color-picker { border: none; width: 24px; height: 24px; cursor: pointer; border-radius: 4px; padding: 0; background: none; }
+    .legend-tag { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; }
+    .legend-color { width: 14px; height: 14px; border-radius: 3px; }
 
-    /* Timetable Grid */
-    .timetable-wrapper {
-      background: var(--card-bg);
+    /* Grid */
+    .grid-container {
+      background: #fff;
       border: 1px solid var(--border);
       border-radius: 8px;
       overflow-x: auto;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    table { width: 100%; border-collapse: collapse; min-width: 950px; table-layout: fixed; }
-    th, td { border: 1px solid #e2e8f0; padding: 0.5rem; text-align: center; vertical-align: top; }
-    th { background: #f1f5f9; font-size: 0.8rem; font-weight: bold; }
-    .day-col { font-weight: bold; width: 100px; background: #f8fafc; font-size: 0.85rem; }
-    
-    /* Task Block */
-    .slot-cell { height: 85px; position: relative; transition: all 0.2s; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 900px; }
+    th, td { border: 1px solid var(--border); text-align: center; vertical-align: top; padding: 0.5rem; }
+    th { background: #f8fafc; font-size: 0.75rem; font-weight: bold; }
+    .time-col { width: 85px; font-weight: bold; background: #f8fafc; font-size: 0.75rem; }
+
+    .slot-cell { height: 90px; text-align: left; }
     .task-card {
       border-radius: 6px;
       padding: 0.4rem;
       font-size: 0.75rem;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
+      margin-bottom: 0.25rem;
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       border: 1px solid rgba(0,0,0,0.15);
     }
-    .task-title { font-weight: bold; font-size: 0.8rem; }
-    .task-detail { font-size: 0.7rem; color: #333; }
-    .task-actions {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 4px;
-      gap: 4px;
-    }
-    button.btn-action {
-      background: rgba(255,255,255,0.85);
-      border: 1px solid rgba(0,0,0,0.2);
-      border-radius: 4px;
-      font-size: 0.65rem;
-      padding: 2px 4px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    button.btn-action:hover { background: #ffffff; }
-
-    /* Print styling */
-    @media print {
-      body { padding: 0; background: #fff; }
-      header, .metrics-bar, .task-actions, button { display: none !important; }
-      table { border-color: #000; }
-      th, td { border-color: #000; }
-    }
+    .task-card.completed { opacity: 0.5; text-decoration: line-through; }
+    .card-title { font-weight: bold; font-size: 0.75rem; }
+    .card-detail { font-size: 0.65rem; color: #333; margin-top: 2px; }
+    .card-actions { display: flex; justify-content: space-between; margin-top: 4px; }
+    .action-btn { background: rgba(255,255,255,0.85); border: 1px solid rgba(0,0,0,0.2); border-radius: 3px; font-size: 0.6rem; padding: 1px 4px; cursor: pointer; }
   </style>
 </head>
 <body>
 
-  <header>
-    <h1>Weekly Priority Planner & Execution Dashboard</h1>
-    <div>
-      <button class="btn-action" style="padding: 6px 12px; font-size: 0.85rem;" onclick="window.print()">Print / Export PDF</button>
+  <!-- Left Sidebar Task Creator -->
+  <aside class="sidebar">
+    <div class="brand">Priority Planner</div>
+    <div class="user-tag">
+      <span>Logged in: <b>{{ username }}</b></span>
+      <a href="/logout">Log Out</a>
     </div>
-  </header>
 
-  <!-- Aggregated Metrics -->
-  <div class="metrics-bar">
-    <div class="metric-card">
-      <div class="metric-title">Total Tasks</div>
-      <div class="metric-value" id="metric-total">{{ state.tasks|length }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-title">Completed</div>
-      <div class="metric-value" id="metric-completed">0</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-title">Rescheduled / Struggled</div>
-      <div class="metric-value" id="metric-rescheduled">0</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-title">Completion Rate</div>
-      <div class="metric-value" id="metric-rate">0%</div>
-    </div>
-  </div>
+    <div class="panel-title">Add New Task</div>
 
-  <!-- Dynamic Priority Key -->
-  <div class="legend-container">
-    <div class="legend-title">Priority Legend (Click color box to customize palette)</div>
-    <div class="legend-items" id="legend-items">
-      {% for p in state.priorities %}
-      <div class="legend-item">
-        <input type="color" class="color-picker" id="picker-{{ p.id }}" value="{{ p.color }}" onchange="updatePalette('{{ p.id }}', this.value)">
+    <div class="form-group">
+      <label>1. Select Date (Calendar)</label>
+      <input type="date" id="inputDate" value="{{ cur_week_str }}">
+    </div>
+
+    <div class="form-group">
+      <label>2. Start Time</label>
+      <input type="time" id="inputTime" value="09:10">
+    </div>
+
+    <div class="form-group">
+      <label>3. Duration</label>
+      <select id="inputDuration">
+        <option value="30 mins">30 mins</option>
+        <option value="45 mins">45 mins</option>
+        <option value="1 hour" selected>1 hour</option>
+        <option value="1.5 hours">1.5 hours</option>
+        <option value="2 hours">2 hours</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>4. Priority Tier</label>
+      <select id="inputPriority">
+        {% for p in priorities %}
+        <option value="{{ p.id }}">{{ p.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>5. Task / Subject</label>
+      <input type="text" id="inputTitle" placeholder="e.g. Maths GCSE, Stakeholder Review">
+    </div>
+
+    <div class="form-group">
+      <label>6. Details / Location / Room</label>
+      <input type="text" id="inputDetail" placeholder="e.g. Room B102, Victoria">
+    </div>
+
+    <button class="btn-create" onclick="submitTask()">Schedule Task</button>
+  </aside>
+
+  <!-- Main Timetable Area -->
+  <main class="main-content">
+    <div class="top-nav">
+      <div class="week-nav">
+        <a href="/dashboard?week_start={{ prev_week }}" class="nav-btn">← Prev Week</a>
+        <a href="/dashboard" class="nav-btn">Current Week</a>
+        <a href="/dashboard?week_start={{ next_week }}" class="nav-btn">Next Week →</a>
+      </div>
+      <div class="week-title">Week of {{ week_dates[0].strftime("%B %d, %Y") }}</div>
+      <div>
+        <a href="/priority-setup" class="nav-btn">Edit Priority Palette</a>
+        <button class="nav-btn" onclick="window.print()">Export / Print</button>
+      </div>
+    </div>
+
+    <!-- Active Palette Display -->
+    <div class="legend-bar">
+      <span style="font-size: 0.75rem; font-weight: bold; color: #475569;">Key:</span>
+      {% for p in priorities %}
+      <div class="legend-tag">
+        <div class="legend-color" style="background: {{ p.color }};"></div>
         <span>{{ p.label }}</span>
       </div>
       {% endfor %}
     </div>
-  </div>
 
-  <!-- Timetable Grid -->
-  <div class="timetable-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th class="day-col">Day / Slot</th>
-          {% for slot in state.time_slots %}
-          <th>{{ slot }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for day in state.days %}
-        <tr>
-          <td class="day-col">{{ day }}</td>
-          {% for slot_idx in range(state.time_slots|length) %}
-            <td class="slot-cell" id="slot-{{ day }}-{{ slot_idx }}">
-              {% for task in state.tasks %}
-                {% if task.day == day and task.slot_idx == slot_idx %}
-                  {% set p_color = "#ffffff" %}
-                  {% for p in state.priorities %}
-                    {% if p.id == task.priority_id %}
-                      <div class="task-card" id="card-{{ task.id }}" style="background-color: {{ p.color }};">
-                        <div>
-                          <div class="task-title">{{ task.title }}</div>
-                          <div class="task-detail">{{ task.detail }}</div>
+    <!-- Calendar Table -->
+    <div class="grid-container">
+      <table>
+        <thead>
+          <tr>
+            <th class="time-col">Time</th>
+            {% for d in week_dates %}
+            <th>{{ d.strftime("%A") }}<br><span style="font-size: 0.7rem; color: #64748b;">{{ d.strftime("%d %b") }}</span></th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for slot in time_slots %}
+          <tr>
+            <td class="time-col">{{ slot }}</td>
+            {% for d in week_dates %}
+              {% set cell_date = d.strftime("%Y-%m-%d") %}
+              <td class="slot-cell">
+                {% for task in tasks %}
+                  {% if task.date == cell_date and task.time == slot %}
+                    {% for p in priorities %}
+                      {% if p.id == task.priority_id %}
+                        <div class="task-card {{ 'completed' if task.status == 'completed' else '' }}" style="background-color: {{ p.color }};">
+                          <div class="card-title">{{ task.title }}</div>
+                          <div class="card-detail">{{ task.detail }} ({{ task.duration }})</div>
+                          <div class="card-actions">
+                            <button class="action-btn" onclick="toggleComplete({{ task.id }}, '{{ task.status }}')">
+                              {{ 'Undo' if task.status == 'completed' else 'Done' }}
+                            </button>
+                            <button class="action-btn" style="color: #b91c1c;" onclick="rescheduleTask({{ task.id }})">Reschedule</button>
+                            <button class="action-btn" style="color: #64748b;" onclick="deleteTask({{ task.id }})">✕</button>
+                          </div>
                         </div>
-                        <div class="task-actions">
-                          <button class="btn-action" onclick="toggleComplete({{ task.id }})">
-                            {{ 'Completed' if task.status == 'completed' else 'Done' }}
-                          </button>
-                          <button class="btn-action" style="color: #b91c1c;" onclick="promptReschedule({{ task.id }})">Struggle</button>
-                        </div>
-                      </div>
-                    {% endif %}
-                  {% endfor %}
-                {% endif %}
-              {% endfor %}
-            </td>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endfor %}
+              </td>
+            {% endfor %}
+          </tr>
           {% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+        </tbody>
+      </table>
+    </div>
+  </main>
 
   <script>
-    // Fetch and sync analytics on load
-    async function loadAnalytics() {
-      const res = await fetch('/api/analytics');
-      const data = await res.json();
-      document.getElementById('metric-total').innerText = data.total;
-      document.getElementById('metric-completed').innerText = data.completed;
-      document.getElementById('metric-rescheduled').innerText = data.rescheduled;
-      document.getElementById('metric-rate').innerText = data.completion_rate + '%';
-    }
+    async function submitTask() {
+      const date = document.getElementById('inputDate').value;
+      const time = document.getElementById('inputTime').value;
+      const duration = document.getElementById('inputDuration').value;
+      const priority_id = document.getElementById('inputPriority').value;
+      const title = document.getElementById('inputTitle').value.trim();
+      const detail = document.getElementById('inputDetail').value.trim();
 
-    async function toggleComplete(taskId) {
-      await fetch('/api/task/status', {
+      if (!title || !date) {
+        alert("Please enter a title and select a date.");
+        return;
+      }
+
+      await fetch('/api/task/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, status: 'completed' })
+        body: JSON.stringify({ date, time, duration, priority_id, title, detail })
       });
       location.reload();
     }
 
-    async function promptReschedule(taskId) {
-      const day = prompt("Move this task to which day? (Monday, Tuesday, Wednesday, Thursday, Friday)");
-      const slot = prompt("Slot index? (0 for 8.30, 1 for 9.10, 4 for 11.50, etc.)");
-      if (day && slot !== null) {
+    async function toggleComplete(taskId, currentStatus) {
+      const nextStatus = currentStatus === 'completed' ? 'pending' : 'completed';
+      await fetch('/api/task/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, status: nextStatus })
+      });
+      location.reload();
+    }
+
+    async function rescheduleTask(taskId) {
+      const new_date = prompt("Select new date (YYYY-MM-DD):", "{{ cur_week_str }}");
+      const new_time = prompt("Select new start time (e.g. 09:10, 11:50):", "09:10");
+      if (new_date && new_time) {
         await fetch('/api/task/reschedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: taskId, new_day: day, new_slot: parseInt(slot) })
+          body: JSON.stringify({ task_id: taskId, new_date, new_time })
         });
         location.reload();
       }
     }
 
-    async function updatePalette(priorityId, newColor) {
-      // Find priority and update
-      const res = await fetch('/api/priorities', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priorities: [
-            {% for p in state.priorities %}
-              {
-                id: "{{ p.id }}",
-                label: "{{ p.label }}",
-                color: "{{ p.id }}" === priorityId ? newColor : "{{ p.color }}"
-              },
-            {% endfor %}
-          ]
-        })
-      });
-      location.reload();
+    async function deleteTask(taskId) {
+      if (confirm("Delete this scheduled task?")) {
+        await fetch('/api/task/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: taskId })
+        });
+        location.reload();
+      }
     }
-
-    loadAnalytics();
   </script>
 </body>
 </html>
