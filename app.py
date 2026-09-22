@@ -66,6 +66,10 @@ def register():
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return redirect(url_for("register"))
 
         if not username or not email or not password:
             flash("All fields are required.", "error")
@@ -95,6 +99,10 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return redirect(url_for("register"))
 
         with get_db() as conn:
             user = conn.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username)).fetchone()
