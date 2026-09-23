@@ -34,7 +34,7 @@
       width: 100%;
       box-sizing: border-box;
       padding: 0.65rem;
-      padding-right: 2.25rem;
+      padding-right: 2.5rem;
       border-radius: 6px;
       border: 1px solid #475569;
       background: #0f172a;
@@ -49,10 +49,21 @@
       border: none;
       cursor: pointer;
       color: #94a3b8;
-      font-size: 1rem;
-      padding: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
     }
-    .toggle-btn:hover { color: #f8fafc; }
+    .toggle-btn:hover { color: #38bdf8; }
+    .toggle-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
     .btn {
       width: 100%;
       padding: 0.75rem;
@@ -86,7 +97,12 @@
         <label>Password</label>
         <div class="input-wrapper">
           <input type="password" id="loginPassword" name="password" required>
-          <button type="button" class="toggle-btn" onclick="toggleVisibility('loginPassword', this)" title="Show/Hide">👁️</button>
+          <button type="button" class="toggle-btn" onclick="toggleVisibility('loginPassword', this)" aria-label="Toggle password view">
+            <svg viewBox="0 0 24 24">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
         </div>
       </div>
       <button type="submit" class="btn">Sign In</button>
@@ -98,14 +114,28 @@
   </div>
 
   <script>
+    const eyeOpenSvg = `
+      <svg viewBox="0 0 24 24">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg>
+    `;
+
+    const eyeClosedSvg = `
+      <svg viewBox="0 0 24 24">
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+      </svg>
+    `;
+
     function toggleVisibility(inputId, btn) {
       const input = document.getElementById(inputId);
       if (input.type === "password") {
         input.type = "text";
-        btn.textContent = "🙈";
+        btn.innerHTML = eyeClosedSvg;
       } else {
         input.type = "password";
-        btn.textContent = "👁️";
+        btn.innerHTML = eyeOpenSvg;
       }
     }
   </script>
