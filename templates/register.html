@@ -22,14 +22,25 @@
       box-shadow: 0 10px 25px rgba(0,0,0,0.4);
       border: 1px solid #334155;
     }
-    h2 { margin-top: 0; font-size: 1.4rem; color: #38bdf8; }
+    h2 { margin-top: 0; margin-bottom: 0.5rem; font-size: 1.4rem; color: #38bdf8; }
+    
+    /* Dedicated Red Alert Banner right below header */
+    .alert-banner {
+      display: none;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      padding: 0.65rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      margin-bottom: 1.15rem;
+      line-height: 1.4;
+    }
+    .alert-banner.visible { display: block; }
+
     .form-group { margin-bottom: 0.9rem; }
     label { display: block; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.35rem; color: #cbd5e1; }
-    .input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
+    .input-wrapper { position: relative; display: flex; align-items: center; }
     input {
       width: 100%;
       box-sizing: border-box;
@@ -41,10 +52,7 @@
       color: #fff;
       font-size: 0.85rem;
     }
-    input:focus {
-      outline: none;
-      border-color: #38bdf8;
-    }
+    input:focus { outline: none; border-color: #38bdf8; }
     .toggle-btn {
       position: absolute;
       right: 8px;
@@ -58,15 +66,7 @@
       padding: 4px;
     }
     .toggle-btn:hover { color: #38bdf8; }
-    .toggle-btn svg {
-      width: 18px;
-      height: 18px;
-      stroke: currentColor;
-      fill: none;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
+    .toggle-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .btn {
       width: 100%;
       padding: 0.75rem;
@@ -80,7 +80,6 @@
       font-size: 0.9rem;
     }
     .btn:hover { background: #0369a1; }
-    .flashes { color: #f87171; font-size: 0.8rem; margin-bottom: 0.75rem; }
     .links { text-align: center; margin-top: 1rem; font-size: 0.8rem; }
     .links a { color: #38bdf8; text-decoration: none; }
   </style>
@@ -88,10 +87,16 @@
 <body>
   <div class="card">
     <h2>Create an Account</h2>
+    
+    <!-- Red Alert Box Directly Below Heading -->
+    <div id="clientError" class="alert-banner"></div>
     {% with messages = get_flashed_messages() %}
-      {% if messages %}<div class="flashes">{{ messages[0] }}</div>{% endif %}
+      {% if messages %}
+        <div class="alert-banner visible">{{ messages[0] }}</div>
+      {% endif %}
     {% endwith %}
-    <form method="POST" onsubmit="return validatePasswords()">
+
+    <form method="POST" onsubmit="return validatePasswords(event)">
       <div class="form-group">
         <label>Username</label>
         <input type="text" name="username" required>
@@ -104,12 +109,8 @@
         <label>Password</label>
         <div class="input-wrapper">
           <input type="password" id="regPassword" name="password" required>
-          <button type="button" class="toggle-btn" onclick="toggleVisibility('regPassword', this)" aria-label="Toggle password view">
-            <!-- Line Eye Open Icon -->
-            <svg class="eye-icon" viewBox="0 0 24 24">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
+          <button type="button" class="toggle-btn" onclick="toggleVisibility('regPassword', this)">
+            <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </button>
         </div>
       </div>
@@ -117,11 +118,8 @@
         <label>Confirm Password</label>
         <div class="input-wrapper">
           <input type="password" id="confirmPassword" name="confirm_password" required>
-          <button type="button" class="toggle-btn" onclick="toggleVisibility('confirmPassword', this)" aria-label="Toggle password view">
-            <svg class="eye-icon" viewBox="0 0 24 24">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
+          <button type="button" class="toggle-btn" onclick="toggleVisibility('confirmPassword', this)">
+            <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </button>
         </div>
       </div>
@@ -131,19 +129,8 @@
   </div>
 
   <script>
-    const eyeOpenSvg = `
-      <svg viewBox="0 0 24 24">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-        <circle cx="12" cy="12" r="3"></circle>
-      </svg>
-    `;
-
-    const eyeClosedSvg = `
-      <svg viewBox="0 0 24 24">
-        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-        <line x1="1" y1="1" x2="23" y2="23"></line>
-      </svg>
-    `;
+    const eyeOpenSvg = `<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    const eyeClosedSvg = `<svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 
     function toggleVisibility(inputId, btn) {
       const input = document.getElementById(inputId);
@@ -156,11 +143,15 @@
       }
     }
 
-    function validatePasswords() {
+    function validatePasswords(event) {
       const p1 = document.getElementById('regPassword').value;
       const p2 = document.getElementById('confirmPassword').value;
+      const banner = document.getElementById('clientError');
+
       if (p1 !== p2) {
-        alert("Passwords do not match. Please try again.");
+        event.preventDefault(); // Stop submission completely without browser popup
+        banner.textContent = "Passwords do not match.";
+        banner.classList.add('visible');
         return false;
       }
       return true;
