@@ -64,6 +64,8 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
         """)
+                # Auto-migrate any existing records to current default priorities
+        conn.execute("UPDATE users SET priorities_json = ? WHERE priorities_json LIKE '%Teaching%' OR priorities_json IS NULL", (json.dumps(DEFAULT_PRIORITIES),))
         conn.commit()
 
 init_db()
