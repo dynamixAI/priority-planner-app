@@ -2,31 +2,139 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Configure Priority Schema | Priority Planner</title>
+  <title>Configure Priority Schema</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
-    .card { background: #1e293b; padding: 2.5rem; border-radius: 12px; width: 480px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); border: 1px solid #334155; }
-    h2 { margin-top: 0; color: #38bdf8; font-size: 1.3rem; }
-    p { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.5rem; }
-    .priority-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
-    input[type="color"] { border: none; width: 38px; height: 38px; border-radius: 6px; cursor: pointer; background: none; }
-    input[type="text"] { flex-grow: 1; padding: 0.6rem; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 0.85rem; }
-    .btn { width: 100%; padding: 0.75rem; border-radius: 6px; background: #0284c7; color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 1rem; font-size: 0.95rem; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1.5rem;
+      box-sizing: border-box;
+    }
+    .card {
+      background: #1e293b;
+      padding: 2.25rem;
+      border-radius: 12px;
+      width: 480px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      border: 1px solid #334155;
+    }
+    h2 { margin-top: 0; color: #38bdf8; font-size: 1.35rem; }
+    p { font-size: 0.85rem; color: #94a3b8; line-height: 1.4; margin-bottom: 1.5rem; }
+    
+    .priority-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
+    .priority-row { display: flex; align-items: center; gap: 0.65rem; }
+    
+    input[type="color"] {
+      border: none;
+      width: 38px;
+      height: 38px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
+      padding: 0;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 0.6rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 0.85rem;
+    }
+    input[type="text"]:focus { outline: none; border-color: #38bdf8; }
+
+    .btn-delete {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      border-radius: 6px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-delete:hover { background: rgba(239, 68, 68, 0.3); }
+
+    .btn-add {
+      background: transparent;
+      border: 1px dashed #475569;
+      color: #38bdf8;
+      width: 100%;
+      padding: 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+    }
+    .btn-add:hover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.05); }
+
+    .btn-save {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 6px;
+      background: #0284c7;
+      color: #fff;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .btn-save:hover { background: #0369a1; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Step 2: Choose Your Priority Schema</h2>
-    <p>Customize your tags and colors below, or proceed with these standard defaults. You can always refine these later.</p>
+    <p>Customize your tags and colors below, add new tiers, or remove ones you do not need. You can always refine these later in your settings.</p>
+
     <form method="POST">
-      {% for p in priorities %}
-      <div class="priority-row">
-        <input type="color" name="color_{{ p.id }}" value="{{ p.color }}">
-        <input type="text" name="label_{{ p.id }}" value="{{ p.label }}">
+      <div class="priority-list" id="priorityList">
+        {% for p in priorities %}
+        <div class="priority-row">
+          <input type="color" name="colors[]" value="{{ p.color }}">
+          <input type="text" name="labels[]" value="{{ p.label }}" required>
+          <button type="button" class="btn-delete" onclick="removeRow(this)" title="Delete tier">✕</button>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-      <button type="submit" class="btn">Save & Open Planner Dashboard</button>
+
+      <button type="button" class="btn-add" onclick="addRow()">+ Add Priority Tier</button>
+      <button type="submit" class="btn-save">Save & Open Planner Dashboard</button>
     </form>
   </div>
+
+  <script>
+    function removeRow(btn) {
+      const list = document.getElementById('priorityList');
+      if (list.children.length <= 1) {
+        alert("You must keep at least one priority level.");
+        return;
+      }
+      btn.closest('.priority-row').remove();
+    }
+
+    function addRow() {
+      const list = document.getElementById('priorityList');
+      const row = document.createElement('div');
+      row.className = 'priority-row';
+      row.innerHTML = `
+        <input type="color" name="colors[]" value="#38bdf8">
+        <input type="text" name="labels[]" placeholder="Custom Priority" required>
+        <button type="button" class="btn-delete" onclick="removeRow(this)" title="Delete tier">✕</button>
+      `;
+      list.appendChild(row);
+    }
+  </script>
 </body>
 </html>
