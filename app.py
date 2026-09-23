@@ -9,7 +9,7 @@ app = Flask(__name__)
 app.secret_key = "priority-planner-secret-key-prod-random-seed"
 DB_NAME = "planner.db"
 
-# Option 2: Eisenhower Matrix Defaults
+# Eisenhower Matrix Defaults
 DEFAULT_PRIORITIES = [
     {"id": "p_q1", "label": "Q1: Urgent & Important", "color": "#ef4444"},
     {"id": "p_q2", "label": "Q2: Not Urgent, but Important", "color": "#3b82f6"},
@@ -17,9 +17,8 @@ DEFAULT_PRIORITIES = [
     {"id": "p_q4", "label": "Q4: Not Urgent & Not Important", "color": "#10b981"}
 ]
 
-TIME_SLOTS = [
-    "08:30", "09:10", "10:15", "10:40", "11:50", "12:55", "13:40", "14:50", "16:00"
-]
+# Complete 24-Hour Time Scale
+TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
@@ -56,19 +55,45 @@ def init_db():
                 user_id INTEGER NOT NULL,
                 title TEXT NOT NULL,
                 detail TEXT,
+                location TEXT,
                 date TEXT NOT NULL,
                 time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
                 duration TEXT NOT NULL,
                 priority_id TEXT NOT NULL,
                 status TEXT DEFAULT 'pending',
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
         """)
-                # Auto-migrate any existing records to current default priorities
+        cursor.execute("PRAGMA table_info(tasks)")
+        task_cols = [c[1] for c in cursor.fetchall()]
+        if "location" not in task_cols:
+            conn.execute("ALTER TABLE tasks ADD COLUMN location TEXT")
+        if "end_time" not in task_cols:
+            conn.execute("ALTER TABLE tasks ADD COLUMN end_time TEXT DEFAULT ''")
+
+        # Auto-migrate any legacy user accounts to Eisenhower Matrix if needed
         conn.execute("UPDATE users SET priorities_json = ? WHERE priorities_json LIKE '%Teaching%' OR priorities_json IS NULL", (json.dumps(DEFAULT_PRIORITIES),))
         conn.commit()
 
 init_db()
+
+def compute_end_time(start_str, duration_str):
+    try:
+        t = datetime.strptime(start_str, "%H:%M")
+    except ValueError:
+        return start_str
+    
+    minutes_map = {
+        "30 mins": 30,
+        "45 mins": 45,
+        "1 hour": 60,
+        "1.5 hours": 90,
+        "2 hours": 120
+    }
+    added_mins = minutes_map.get(duration_str, 60)
+    end_t = t + timedelta(minutes=added_mins)
+    return end_t.strftime("%H:%M")
 
 @app.route("/")
 def home():
@@ -234,7 +259,8 @@ def dashboard():
     else:
         start_date = datetime.today().date() - timedelta(days=datetime.today().weekday())
 
-    week_dates = [start_date + timedelta(days=i) for i in range(5)]
+    # 7-day full week coverage (Monday through Sunday)
+    week_dates = [start_date + timedelta(days=i) for i in range(7)]
     prev_week = (start_date - timedelta(days=7)).strftime("%Y-%m-%d")
     next_week = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
     cur_week_str = start_date.strftime("%Y-%m-%d")
@@ -250,6 +276,13 @@ def dashboard():
             [user_id] + week_date_strs
         ).fetchall()
 
+        all_user_tasks = conn.execute("SELECT status FROM tasks WHERE user_id = ?", (user_id,)).fetchall()
+        total_tasks = len(all_user_tasks)
+        done_tasks = sum(1 for t in all_user_tasks if t["status"] == "completed")
+        pushed_tasks = sum(1 for t in all_user_tasks if t["status"] == "rescheduled")
+        undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
+        exec_rate = round((done_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0
+
     return render_template(
         "dashboard.html",
         username=session.get("username"),
@@ -259,7 +292,14 @@ def dashboard():
         prev_week=prev_week,
         next_week=next_week,
         cur_week_str=cur_week_str,
-        time_slots=TIME_SLOTS
+        time_slots=TIME_SLOTS,
+        metrics={
+            "total": total_tasks,
+            "done": done_tasks,
+            "undone": undone_tasks,
+            "pushed": pushed_tasks,
+            "rate": exec_rate
+        }
     )
 
 @app.route("/api/task/add", methods=["POST"])
@@ -267,10 +307,15 @@ def add_task():
     if "user_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
+    
+    start_time = data.get("time", "09:00")
+    duration = data.get("duration", "1 hour")
+    end_time = compute_end_time(start_time, duration)
+
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO tasks (user_id, title, detail, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
-            (session["user_id"], data.get("title"), data.get("detail"), data.get("date"), data.get("time"), data.get("duration"), data.get("priority_id"))
+            "INSERT INTO tasks (user_id, title, detail, location, date, time, end_time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+            (session["user_id"], data.get("title"), data.get("detail"), data.get("location", ""), data.get("date"), start_time, end_time, duration, data.get("priority_id"))
         )
         conn.commit()
     return jsonify({"status": "success"})
@@ -290,10 +335,18 @@ def reschedule_task():
     if "user_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
+    task_id = data.get("task_id")
+    new_date = data.get("new_date")
+    new_time = data.get("new_time")
+
     with get_db() as conn:
+        task = conn.execute("SELECT duration FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"])).fetchone()
+        duration = task["duration"] if task else "1 hour"
+        new_end_time = compute_end_time(new_time, duration)
+
         conn.execute(
-            "UPDATE tasks SET date = ?, time = ?, status = 'rescheduled' WHERE id = ? AND user_id = ?",
-            (data.get("new_date"), data.get("new_time"), data.get("task_id"), session["user_id"])
+            "UPDATE tasks SET date = ?, time = ?, end_time = ?, status = 'rescheduled' WHERE id = ? AND user_id = ?",
+            (new_date, new_time, new_end_time, task_id, session["user_id"])
         )
         conn.commit()
     return jsonify({"status": "success"})
