@@ -9,12 +9,12 @@ app = Flask(__name__)
 app.secret_key = "priority-planner-secret-key-prod-random-seed"
 DB_NAME = "planner.db"
 
+# Option 2: Eisenhower Matrix Defaults
 DEFAULT_PRIORITIES = [
-    {"id": "p1", "label": "Urgent / Core", "color": "#ef5350"},
-    {"id": "p2", "label": "Teaching / Delivery", "color": "#fdd835"},
-    {"id": "p3", "label": "1-to-1 Support", "color": "#fb8c00"},
-    {"id": "p4", "label": "Admin / Prep", "color": "#64b5f6"},
-    {"id": "break", "label": "Break / Lunch", "color": "#b0bec5"}
+    {"id": "p_q1", "label": "Q1: Urgent & Important", "color": "#ef4444"},
+    {"id": "p_q2", "label": "Q2: Not Urgent, but Important", "color": "#3b82f6"},
+    {"id": "p_q3", "label": "Q3: Urgent, Not Important", "color": "#f59e0b"},
+    {"id": "p_q4", "label": "Q4: Not Urgent & Not Important", "color": "#10b981"}
 ]
 
 TIME_SLOTS = [
@@ -40,7 +40,6 @@ def init_db():
                 is_permanently_locked INTEGER DEFAULT 0
             );
         """)
-        # Ensure migration columns exist if DB was created previously
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(users)")
         cols = [c[1] for c in cursor.fetchall()]
@@ -122,20 +121,16 @@ def login():
                 flash("Invalid credentials. If you don't remember your details, use the forgot password option.", "error")
                 return redirect(url_for("login"))
 
-            # Check permanent lock (Tier 3: 9+ attempts)
             if user["is_permanently_locked"]:
                 flash("Account locked due to excessive failed attempts. Please verify via email to reset your password.", "error")
                 return redirect(url_for("login"))
 
-            # Check temporary lock (Tier 1: 2 min, Tier 2: 5 min)
             if user["lock_until"] and now < user["lock_until"]:
                 mins_left = int((user["lock_until"] - now) // 60) + 1
                 flash(f"Account temporarily locked for security. Please try again in {mins_left} minute(s), or reset your password.", "error")
                 return redirect(url_for("login"))
 
-            # Check password
             if check_password_hash(user["password_hash"], password):
-                # Successful login: reset failed counters
                 conn.execute("UPDATE users SET failed_attempts = 0, lock_until = 0 WHERE id = ?", (user["id"],))
                 conn.commit()
                 session["user_id"] = user["id"]
@@ -151,10 +146,10 @@ def login():
                     perm_lock = 1
                     error_msg = "Account closed due to repeated failed attempts. You must verify via email to restore access."
                 elif attempts >= 8:
-                    lock_until = now + (5 * 60) # 5 minutes lockout
+                    lock_until = now + (5 * 60)
                     error_msg = "Too many failed attempts. Account locked for 5 minutes. Use forgot password if needed."
                 elif attempts >= 5:
-                    lock_until = now + (2 * 60) # 2 minutes lockout
+                    lock_until = now + (2 * 60)
                     error_msg = "Too many failed attempts. Account locked for 2 minutes. Use forgot password if needed."
 
                 conn.execute(
@@ -174,7 +169,6 @@ def forgot_password():
         with get_db() as conn:
             user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
             if user:
-                # Clear lockout flags when reset is initiated
                 conn.execute("UPDATE users SET failed_attempts = 0, lock_until = 0, is_permanently_locked = 0 WHERE id = ?", (user["id"],))
                 conn.commit()
                 flash(f"Verification instructions sent to {email}. Follow the email link to unlock and create a new password.", "info")
@@ -194,20 +188,31 @@ def priority_setup():
         return redirect(url_for("login"))
     user_id = session["user_id"]
 
-    with get_db() as conn:
-        user = conn.execute("SELECT priorities_json FROM users WHERE id = ?", (user_id,)).fetchone()
-        priorities = json.loads(user["priorities_json"]) if user and user["priorities_json"] else DEFAULT_PRIORITIES
-
     if request.method == "POST":
+        labels = request.form.getlist("labels[]")
+        colors = request.form.getlist("colors[]")
+        
         new_priorities = []
-        for p in priorities:
-            label = request.form.get(f"label_{p['id']}", p["label"])
-            color = request.form.get(f"color_{p['id']}", p["color"])
-            new_priorities.append({"id": p["id"], "label": label, "color": color})
+        for i, (label, color) in enumerate(zip(labels, colors)):
+            clean_label = label.strip()
+            if clean_label:
+                new_priorities.append({
+                    "id": f"p_{i+1}",
+                    "label": clean_label,
+                    "color": color
+                })
+
+        if not new_priorities:
+            new_priorities = DEFAULT_PRIORITIES
+
         with get_db() as conn:
             conn.execute("UPDATE users SET priorities_json = ? WHERE id = ?", (json.dumps(new_priorities), user_id))
             conn.commit()
         return redirect(url_for("dashboard"))
+
+    with get_db() as conn:
+        user = conn.execute("SELECT priorities_json FROM users WHERE id = ?", (user_id,)).fetchone()
+        priorities = json.loads(user["priorities_json"]) if user and user["priorities_json"] else DEFAULT_PRIORITIES
 
     return render_template("priority_setup.html", priorities=priorities)
 
