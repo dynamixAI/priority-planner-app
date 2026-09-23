@@ -1,11 +1,12 @@
 import sqlite3
 import json
+import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = "priority-planner-secret-key-change-if-needed"
+app.secret_key = "priority-planner-secret-key-prod-random-seed"
 DB_NAME = "planner.db"
 
 DEFAULT_PRIORITIES = [
@@ -33,9 +34,23 @@ def init_db():
                 username TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                priorities_json TEXT
+                priorities_json TEXT,
+                failed_attempts INTEGER DEFAULT 0,
+                lock_until REAL DEFAULT 0,
+                is_permanently_locked INTEGER DEFAULT 0
             );
         """)
+        # Ensure migration columns exist if DB was created previously
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(users)")
+        cols = [c[1] for c in cursor.fetchall()]
+        if "failed_attempts" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0")
+        if "lock_until" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN lock_until REAL DEFAULT 0")
+        if "is_permanently_locked" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN is_permanently_locked INTEGER DEFAULT 0")
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,12 +82,13 @@ def register():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
-        if password != confirm_password:
-            flash("Passwords do not match.", "error")
+
+        if not username or not email or not password or not confirm_password:
+            flash("All fields are required.", "error")
             return redirect(url_for("register"))
 
-        if not username or not email or not password:
-            flash("All fields are required.", "error")
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
             return redirect(url_for("register"))
 
         hashed = generate_password_hash(password)
@@ -80,16 +96,15 @@ def register():
             with get_db() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO users (username, email, password_hash, priorities_json) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO users (username, email, password_hash, priorities_json, failed_attempts, lock_until, is_permanently_locked) VALUES (?, ?, ?, ?, 0, 0, 0)",
                     (username, email, hashed, json.dumps(DEFAULT_PRIORITIES))
                 )
                 conn.commit()
                 session["user_id"] = cursor.lastrowid
                 session["username"] = username
-                flash("Account created! Please confirm or customize your priority colors.", "info")
                 return redirect(url_for("priority_setup"))
         except sqlite3.IntegrityError:
-            flash("Username or email already exists.", "error")
+            flash("Username or email already registered.", "error")
             return redirect(url_for("register"))
 
     return render_template("register.html")
@@ -99,19 +114,55 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        confirm_password = request.form.get("confirm_password", "")
-        if password != confirm_password:
-            flash("Passwords do not match.", "error")
-            return redirect(url_for("register"))
+        now = time.time()
 
         with get_db() as conn:
-            user = conn.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username)).fetchone()
-            if user and check_password_hash(user["password_hash"], password):
+            user = conn.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username.lower())).fetchone()
+            if not user:
+                flash("Invalid credentials. If you don't remember your details, use the forgot password option.", "error")
+                return redirect(url_for("login"))
+
+            # Check permanent lock (Tier 3: 9+ attempts)
+            if user["is_permanently_locked"]:
+                flash("Account locked due to excessive failed attempts. Please verify via email to reset your password.", "error")
+                return redirect(url_for("login"))
+
+            # Check temporary lock (Tier 1: 2 min, Tier 2: 5 min)
+            if user["lock_until"] and now < user["lock_until"]:
+                mins_left = int((user["lock_until"] - now) // 60) + 1
+                flash(f"Account temporarily locked for security. Please try again in {mins_left} minute(s), or reset your password.", "error")
+                return redirect(url_for("login"))
+
+            # Check password
+            if check_password_hash(user["password_hash"], password):
+                # Successful login: reset failed counters
+                conn.execute("UPDATE users SET failed_attempts = 0, lock_until = 0 WHERE id = ?", (user["id"],))
+                conn.commit()
                 session["user_id"] = user["id"]
                 session["username"] = user["username"]
                 return redirect(url_for("dashboard"))
             else:
-                flash("Invalid credentials. Try again.", "error")
+                attempts = user["failed_attempts"] + 1
+                lock_until = 0
+                perm_lock = 0
+                error_msg = "Invalid password. If you don't remember it, please use the forgot password option."
+
+                if attempts >= 9:
+                    perm_lock = 1
+                    error_msg = "Account closed due to repeated failed attempts. You must verify via email to restore access."
+                elif attempts >= 8:
+                    lock_until = now + (5 * 60) # 5 minutes lockout
+                    error_msg = "Too many failed attempts. Account locked for 5 minutes. Use forgot password if needed."
+                elif attempts >= 5:
+                    lock_until = now + (2 * 60) # 2 minutes lockout
+                    error_msg = "Too many failed attempts. Account locked for 2 minutes. Use forgot password if needed."
+
+                conn.execute(
+                    "UPDATE users SET failed_attempts = ?, lock_until = ?, is_permanently_locked = ? WHERE id = ?",
+                    (attempts, lock_until, perm_lock, user["id"])
+                )
+                conn.commit()
+                flash(error_msg, "error")
                 return redirect(url_for("login"))
 
     return render_template("login.html")
@@ -123,9 +174,12 @@ def forgot_password():
         with get_db() as conn:
             user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
             if user:
-                flash(f"Password recovery instructions have been sent to {email}.", "success")
+                # Clear lockout flags when reset is initiated
+                conn.execute("UPDATE users SET failed_attempts = 0, lock_until = 0, is_permanently_locked = 0 WHERE id = ?", (user["id"],))
+                conn.commit()
+                flash(f"Verification instructions sent to {email}. Follow the email link to unlock and create a new password.", "info")
             else:
-                flash("If that email exists in our records, instructions have been dispatched.", "info")
+                flash("If that email is on file, verification instructions have been sent.", "info")
         return redirect(url_for("login"))
     return render_template("forgot_password.html")
 
@@ -171,10 +225,9 @@ def dashboard():
         except ValueError:
             start_date = datetime.today().date() - timedelta(days=datetime.today().weekday())
     else:
-        # Start of current week (Monday)
         start_date = datetime.today().date() - timedelta(days=datetime.today().weekday())
 
-    week_dates = [start_date + timedelta(days=i) for i in range(5)] # Mon-Fri
+    week_dates = [start_date + timedelta(days=i) for i in range(5)]
     prev_week = (start_date - timedelta(days=7)).strftime("%Y-%m-%d")
     next_week = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
     cur_week_str = start_date.strftime("%Y-%m-%d")
