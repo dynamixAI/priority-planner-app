@@ -3,6 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <title>Weekly Priority Planner & Execution Dashboard</title>
+  <script>
+    // Read local theme immediately before render to avoid flash of wrong mode
+    const cachedTheme = localStorage.getItem('planner-theme');
+    if (cachedTheme) {
+      document.documentElement.setAttribute('data-theme', cachedTheme);
+    }
+  </script>
   <style>
     :root {
       --bg: #f8fafc;
@@ -60,7 +67,6 @@
     .form-group { margin-bottom: 0.75rem; }
     .form-group label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; color: var(--text); }
     
-    /* Calendar Picker Fix */
     .form-group input, .form-group select {
       width: 100%;
       padding: 0.55rem;
@@ -94,7 +100,7 @@
     }
     .btn-create:hover { background: var(--primary-hover); }
 
-    /* Main Content */
+    /* Main Area */
     .main-content {
       flex: 1;
       padding: 1.25rem;
@@ -176,6 +182,8 @@
     .time-col { width: 85px; font-weight: bold; background: var(--table-header); font-size: 0.75rem; color: var(--metric-muted); }
 
     .slot-cell { height: 80px; text-align: left; }
+    
+    /* Interactive Task Cards */
     .task-card {
       border-radius: 6px;
       padding: 0.4rem;
@@ -183,7 +191,10 @@
       margin-bottom: 0.35rem;
       color: #ffffff;
       box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+      cursor: pointer;
+      transition: transform 0.1s ease;
     }
+    .task-card:hover { transform: scale(1.02); }
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
     .task-card.rescheduled { outline: 2px dashed #ea580c; }
     .card-title { font-weight: bold; font-size: 0.75rem; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
@@ -201,12 +212,12 @@
     }
     .action-btn:hover { background: rgba(15, 23, 42, 0.95); }
 
-    /* Task List Modal */
+    /* Modals */
     .modal-overlay {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.65);
       align-items: center;
       justify-content: center;
       z-index: 999;
@@ -215,13 +226,13 @@
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      width: 700px;
+      width: 600px;
       max-width: 90%;
       max-height: 80vh;
       display: flex;
       flex-direction: column;
       padding: 1.25rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
     }
     .modal-header {
       display: flex;
@@ -239,6 +250,19 @@
       font-size: 0.8rem;
     }
     .modal-table th { background: var(--table-header); }
+
+    /* Detail View Item Box */
+    .detail-row {
+      margin-bottom: 0.75rem;
+      font-size: 0.85rem;
+    }
+    .detail-row b {
+      display: block;
+      color: var(--metric-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
   </style>
 </head>
 <body>
@@ -301,7 +325,7 @@
     <button class="btn-create" onclick="submitTask()">Schedule Task</button>
   </aside>
 
-  <!-- Main Content -->
+  <!-- Main Content Area -->
   <main class="main-content">
     <div class="top-nav">
       <div class="week-nav">
@@ -311,12 +335,12 @@
       </div>
       <div class="week-title">Week of {{ week_dates[0].strftime("%B %d, %Y") }}</div>
       <div>
-        <a href="/settings" class="nav-btn">⚙️ Settings & Display</a>
+        <a href="/settings" class="nav-btn">⚙️ Settings</a>
         <button class="nav-btn" onclick="window.print()">Export / Print</button>
       </div>
     </div>
 
-    <!-- Clickable Anti-Procrastination Metrics Bar -->
+    <!-- Anti-Procrastination Metrics Bar -->
     <div class="metrics-bar">
       <div class="metric-card" onclick="openTaskModal('all')">
         <div class="metric-label">Total Planned</div>
@@ -379,7 +403,10 @@
                         {% set ns.found_color = p.color %}
                       {% endif %}
                     {% endfor %}
-                    <div class="task-card {{ 'completed' if task.status == 'completed' else '' }} {{ 'rescheduled' if task.status == 'rescheduled' else '' }}" style="background-color: {{ ns.found_color }};">
+                    <!-- Clicking the card body opens full details -->
+                    <div class="task-card {{ 'completed' if task.status == 'completed' else '' }} {{ 'rescheduled' if task.status == 'rescheduled' else '' }}" 
+                         style="background-color: {{ ns.found_color }};" 
+                         onclick="showTaskDetail({{ task.id }})">
                       <div class="card-title">{{ task.title }}</div>
                       <div class="card-detail">🕒 {{ task.time }} ({{ task.duration }})</div>
                       {% if task.detail %}
@@ -388,7 +415,7 @@
                       {% if task.location %}
                       <div class="card-location">📍 {{ task.location }}</div>
                       {% endif %}
-                      <div class="card-actions">
+                      <div class="card-actions" onclick="event.stopPropagation()">
                         <button class="action-btn" onclick="toggleComplete({{ task.id }}, '{{ task.status }}')">
                           {{ 'Undo' if task.status == 'completed' else 'Done' }}
                         </button>
@@ -407,9 +434,20 @@
     </div>
   </main>
 
-  <!-- Modal for Metric Card Task Tables -->
+  <!-- Modal 1: Task Inspection / Details Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-content" style="width: 450px;">
+      <div class="modal-header">
+        <h3 id="detTitle" style="margin: 0; font-size: 1.15rem; color: var(--primary);">Task Details</h3>
+        <button class="nav-btn" onclick="closeDetailModal()">Close (✕)</button>
+      </div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Metric Card Filtered Tasks Table -->
   <div class="modal-overlay" id="listModal">
-    <div class="modal-content">
+    <div class="modal-content" style="width: 750px;">
       <div class="modal-header">
         <h3 id="modalTitle" style="margin: 0; font-size: 1.1rem; color: var(--primary);">Tasks</h3>
         <button class="nav-btn" onclick="closeTaskModal()">Close (✕)</button>
@@ -435,6 +473,47 @@
   <script>
     const allTasks = {{ tasks|tojson }};
     const allPriorities = {{ priorities|tojson }};
+
+    function showTaskDetail(taskId) {
+      const task = allTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const prio = allPriorities.find(p => p.id === task.priority_id) || { label: 'General', color: '#0284c7' };
+      const body = document.getElementById('detailBody');
+
+      body.innerHTML = `
+        <div class="detail-row">
+          <b>Task Title</b>
+          <div style="font-size: 1.05rem; font-weight: bold;">${task.title}</div>
+        </div>
+        <div class="detail-row">
+          <b>Date & Time</b>
+          <div>📅 ${task.date} &nbsp;•&nbsp; 🕒 ${task.time} (${task.duration})</div>
+        </div>
+        <div class="detail-row">
+          <b>Priority Level</b>
+          <div><span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:${prio.color}; margin-right:6px;"></span>${prio.label}</div>
+        </div>
+        <div class="detail-row">
+          <b>Location</b>
+          <div>${task.location ? '📍 ' + task.location : '<span style="color:var(--metric-muted);">None specified</span>'}</div>
+        </div>
+        <div class="detail-row">
+          <b>Details & Notes</b>
+          <div style="white-space: pre-wrap; background: var(--table-header); padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border);">${task.detail ? task.detail : '<span style="color:var(--metric-muted);">No notes added.</span>'}</div>
+        </div>
+        <div class="detail-row">
+          <b>Status</b>
+          <div style="text-transform: capitalize;">${task.status}</div>
+        </div>
+      `;
+
+      document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').style.display = 'none';
+    }
 
     function openTaskModal(filter) {
       const modal = document.getElementById('listModal');

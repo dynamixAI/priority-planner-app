@@ -190,6 +190,17 @@ def logout():
     session.clear()
     return redirect(url_for("home"))
 
+@app.route("/api/theme", methods=["POST"])
+def update_theme():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    new_theme = data.get("theme", "light")
+    with get_db() as conn:
+        conn.execute("UPDATE users SET theme = ? WHERE id = ?", (new_theme, session["user_id"]))
+        conn.commit()
+    return jsonify({"status": "success", "theme": new_theme})
+
 @app.route("/settings", methods=["GET", "POST"])
 @app.route("/priority-setup", methods=["GET", "POST"])
 def priority_setup():
@@ -200,7 +211,6 @@ def priority_setup():
     if request.method == "POST":
         labels = request.form.getlist("labels[]")
         colors = request.form.getlist("colors[]")
-        theme = request.form.get("theme", "light")
         
         new_priorities = []
         for i, (label, color) in enumerate(zip(labels, colors)):
@@ -216,10 +226,7 @@ def priority_setup():
             new_priorities = DEFAULT_PRIORITIES
 
         with get_db() as conn:
-            conn.execute(
-                "UPDATE users SET priorities_json = ?, theme = ? WHERE id = ?",
-                (json.dumps(new_priorities), theme, user_id)
-            )
+            conn.execute("UPDATE users SET priorities_json = ? WHERE id = ?", (json.dumps(new_priorities), user_id))
             conn.commit()
         return redirect(url_for("dashboard"))
 
@@ -296,7 +303,6 @@ def add_task():
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
     time_val = data.get("time", "09:00")
-    # Clean time format to HH:MM
     if len(time_val) == 4:
         time_val = "0" + time_val
 

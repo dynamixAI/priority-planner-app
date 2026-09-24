@@ -1,13 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ theme }}">
 <head>
   <meta charset="UTF-8">
-  <title>Settings & Preferences | Priority Planner</title>
+  <title>Settings | Priority Planner</title>
   <style>
+    :root {
+      --bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --border: #cbd5e1;
+      --subtext: #64748b;
+      --input-bg: #f8fafc;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --border: #334155;
+      --subtext: #94a3b8;
+      --input-bg: #0f172a;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f1f5f9;
-      color: #0f172a;
+      background: var(--bg);
+      color: var(--text);
       margin: 0;
       display: flex;
       align-items: center;
@@ -15,68 +37,82 @@
       min-height: 100vh;
       padding: 1.5rem;
       box-sizing: border-box;
+      transition: background 0.15s ease, color 0.15s ease;
     }
     .card {
-      background: #ffffff;
+      background: var(--card-bg);
       padding: 2.25rem;
       border-radius: 12px;
       width: 520px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-      border: 1px solid #cbd5e1;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      border: 1px solid var(--border);
     }
-    h2 { margin-top: 0; color: #0284c7; font-size: 1.4rem; }
-    p { font-size: 0.85rem; color: #64748b; line-height: 1.4; margin-bottom: 1.5rem; }
+    h2 { margin-top: 0; color: var(--primary); font-size: 1.4rem; }
+    p { font-size: 0.85rem; color: var(--subtext); line-height: 1.4; margin-bottom: 1.5rem; }
     
     .section-title {
       font-size: 0.85rem;
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: #334155;
+      color: var(--text);
       margin-top: 1.25rem;
       margin-bottom: 0.65rem;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--border);
       padding-bottom: 0.35rem;
     }
 
-    /* Theme Option Radio */
-    .theme-options { display: flex; gap: 1rem; margin-bottom: 1rem; }
-    .theme-label {
-      flex: 1;
+    /* Instant Theme Switch Buttons */
+    .theme-toggle-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .theme-btn {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 0.5rem;
-      padding: 0.65rem 0.85rem;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.85rem;
-      font-weight: 600;
+      transition: all 0.15s ease;
     }
-    .theme-label:hover { border-color: #0284c7; }
+    .theme-btn:hover { border-color: var(--primary); }
+    .theme-btn.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #ffffff;
+    }
 
     .priority-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
     .priority-row { display: flex; align-items: center; gap: 0.65rem; }
     
     input[type="color"] {
-      border: 1px solid #cbd5e1;
+      border: 1px solid var(--border);
       width: 38px;
       height: 38px;
       border-radius: 6px;
       cursor: pointer;
       padding: 2px;
-      background: #fff;
+      background: var(--card-bg);
     }
     input[type="text"] {
       flex: 1;
       padding: 0.6rem 0.75rem;
       border-radius: 6px;
-      border: 1px solid #cbd5e1;
-      background: #f8fafc;
-      color: #0f172a;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
       font-size: 0.85rem;
     }
-    input[type="text"]:focus { outline: none; border-color: #0284c7; }
+    input[type="text"]:focus { outline: none; border-color: var(--primary); }
 
     .btn-delete {
       background: rgba(239, 68, 68, 0.1);
@@ -94,9 +130,9 @@
     .btn-delete:hover { background: rgba(239, 68, 68, 0.2); }
 
     .btn-add {
-      background: #f8fafc;
-      border: 1px dashed #94a3b8;
-      color: #0284c7;
+      background: var(--input-bg);
+      border: 1px dashed var(--border);
+      color: var(--primary);
       width: 100%;
       padding: 0.65rem;
       border-radius: 6px;
@@ -105,45 +141,43 @@
       font-weight: 600;
       margin-bottom: 1.25rem;
     }
-    .btn-add:hover { border-color: #0284c7; background: #f0f9ff; }
+    .btn-add:hover { border-color: var(--primary); }
 
     .btn-save {
       width: 100%;
       padding: 0.75rem;
       border-radius: 6px;
-      background: #0284c7;
+      background: var(--primary);
       color: #fff;
       font-weight: bold;
       border: none;
       cursor: pointer;
       font-size: 0.95rem;
     }
-    .btn-save:hover { background: #0369a1; }
+    .btn-save:hover { background: var(--primary-hover); }
     .back-link { text-align: center; margin-top: 1rem; font-size: 0.85rem; }
-    .back-link a { color: #0284c7; text-decoration: none; }
+    .back-link a { color: var(--primary); text-decoration: none; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>⚙️ Settings & Preferences</h2>
-    <p>Configure your display mode and customize your task priority schema.</p>
+    <h2>⚙️ Settings</h2>
+    <p>Choose your theme and customize your priority schema.</p>
 
+    <!-- Instant Theme Selector -->
+    <div class="section-title">Theme Mode</div>
+    <div class="theme-toggle-group">
+      <button type="button" class="theme-btn {% if theme != 'dark' %}active{% endif %}" id="btnThemeLight" onclick="setInstantTheme('light')">
+        ☀️ Light Mode
+      </button>
+      <button type="button" class="theme-btn {% if theme == 'dark' %}active{% endif %}" id="btnThemeDark" onclick="setInstantTheme('dark')">
+        🌙 Dark Mode
+      </button>
+    </div>
+
+    <!-- Priority Urgency Schema -->
     <form method="POST">
-      <!-- Theme Selection -->
-      <div class="section-title">Appearance / Mode</div>
-      <div class="theme-options">
-        <label class="theme-label">
-          <input type="radio" name="theme" value="light" {% if theme == 'light' %}checked{% endif %}>
-          ☀️ Light Mode (Clean Default)
-        </label>
-        <label class="theme-label">
-          <input type="radio" name="theme" value="dark" {% if theme == 'dark' %}checked{% endif %}>
-          🌙 Dark Mode
-        </label>
-      </div>
-
-      <!-- Priority Schema -->
-      <div class="section-title">Priority Schema & Urgency Levels</div>
+      <div class="section-title">Priority Schema</div>
       <div class="priority-list" id="priorityList">
         {% for p in priorities %}
         <div class="priority-row">
@@ -155,12 +189,35 @@
       </div>
 
       <button type="button" class="btn-add" onclick="addRow()">+ Add Priority Tier</button>
-      <button type="submit" class="btn-save">Save Settings & Open Dashboard</button>
+      <button type="submit" class="btn-save">Save Priorities & Return to Dashboard</button>
     </form>
-    <div class="back-link"><a href="/dashboard">← Back to Dashboard without saving</a></div>
+    <div class="back-link"><a href="/dashboard">← Back to Dashboard</a></div>
   </div>
 
   <script>
+    // Live theme switcher: applies to DOM immediately and persists to DB
+    function setInstantTheme(mode) {
+      document.documentElement.setAttribute('data-theme', mode);
+      localStorage.setItem('planner-theme', mode);
+
+      document.getElementById('btnThemeLight').classList.toggle('active', mode === 'light');
+      document.getElementById('btnThemeDark').classList.toggle('active', mode === 'dark');
+
+      fetch('/api/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: mode })
+      });
+    }
+
+    // Apply stored preference instantly on load
+    const savedTheme = localStorage.getItem('planner-theme');
+    if (savedTheme) {
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      document.getElementById('btnThemeLight').classList.toggle('active', savedTheme === 'light');
+      document.getElementById('btnThemeDark').classList.toggle('active', savedTheme === 'dark');
+    }
+
     function removeRow(btn) {
       const list = document.getElementById('priorityList');
       if (list.children.length <= 1) {
@@ -175,7 +232,7 @@
       const row = document.createElement('div');
       row.className = 'priority-row';
       row.innerHTML = `
-        <input type="color" name="colors[]" value="#3b82f6">
+        <input type="color" name="colors[]" value="#38bdf8">
         <input type="text" name="labels[]" placeholder="Custom Priority" required>
         <button type="button" class="btn-delete" onclick="removeRow(this)" title="Delete tier">✕</button>
       `;
