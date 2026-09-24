@@ -17,7 +17,7 @@ DEFAULT_PRIORITIES = [
 ]
 
 TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
-DEFAULT_ACTIVE_DAYS = ["0", "1", "2", "3", "4", "5", "6"]
+DEFAULT_ACTIVE_DAYS = ["0", "1", "2", "3", "4", "5", "6"]  # 0=Sunday, 6=Saturday
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
@@ -41,6 +41,22 @@ def init_db():
                 is_permanently_locked INTEGER DEFAULT 0
             );
         """)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(users)")
+        cols = [c[1] for c in cursor.fetchall()]
+        if "theme" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'light'")
+        if "week_start" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN week_start TEXT DEFAULT 'sunday'")
+        if "active_days" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN active_days TEXT DEFAULT '[\"0\",\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]'")
+        if "failed_attempts" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0")
+        if "lock_until" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN lock_until REAL DEFAULT 0")
+        if "is_permanently_locked" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN is_permanently_locked INTEGER DEFAULT 0")
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +72,11 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
         """)
+        cursor.execute("PRAGMA table_info(tasks)")
+        task_cols = [c[1] for c in cursor.fetchall()]
+        if "location" not in task_cols:
+            conn.execute("ALTER TABLE tasks ADD COLUMN location TEXT")
+
         conn.commit()
 
 init_db()
@@ -155,7 +176,7 @@ def forgot_password():
             if user:
                 conn.execute("UPDATE users SET failed_attempts = 0, lock_until = 0, is_permanently_locked = 0 WHERE id = ?", (user["id"],))
                 conn.commit()
-        flash("If that email is on file, instructions have been sent.", "info")
+        flash("If that email is on file, verification instructions have been sent.", "info")
         return redirect(url_for("login"))
     return render_template("forgot_password.html")
 
@@ -220,13 +241,6 @@ def priority_setup():
 
     return render_template("priority_setup.html", priorities=priorities, theme=theme, week_start=week_start, active_days=active_days)
 
-def duration_to_minutes(dur_str):
-    if "30" in dur_str: return 30
-    if "45" in dur_str: return 45
-    if "1.5" in dur_str: return 90
-    if "2" in dur_str: return 120
-    return 60
-
 @app.route("/dashboard")
 def dashboard():
     if "user_id" not in session:
@@ -234,7 +248,6 @@ def dashboard():
 
     user_id = session["user_id"]
     week_param = request.args.get("week_start")
-    now_dt = datetime.now()
 
     with get_db() as conn:
         user = conn.execute("SELECT priorities_json, theme, week_start, active_days FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -243,7 +256,7 @@ def dashboard():
         week_start_pref = user["week_start"] if user and user["week_start"] else "sunday"
         active_days_list = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
 
-    today = now_dt.date()
+    today = datetime.today().date()
     if week_param:
         try:
             start_date = datetime.strptime(week_param, "%Y-%m-%d").date()
@@ -257,31 +270,19 @@ def dashboard():
             start_date = today - timedelta(days=days_since_sunday)
 
     full_week_dates = [start_date + timedelta(days=i) for i in range(7)]
-    def day_to_code(d): return str((d.weekday() + 1) % 7)
+    
+    def day_to_code(d):
+        return str((d.weekday() + 1) % 7)
+
     visible_week_dates = [d for d in full_week_dates if day_to_code(d) in active_days_list]
-    if not visible_week_dates: visible_week_dates = full_week_dates
+    if not visible_week_dates:
+        visible_week_dates = full_week_dates
 
     prev_week = (start_date - timedelta(days=7)).strftime("%Y-%m-%d")
     next_week = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
     cur_week_str = start_date.strftime("%Y-%m-%d")
 
     with get_db() as conn:
-        all_user_tasks = conn.execute("SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,)).fetchall()
-        all_user_tasks = [dict(t) for t in all_user_tasks]
-
-        # Identify elapsed tasks needing reconciliation
-        reconcile_tasks = []
-        for t in all_user_tasks:
-            if t["status"] == "pending":
-                try:
-                    task_time_str = t["time"] if len(t["time"]) == 5 else f"0{t['time']}"
-                    start_dt = datetime.strptime(f"{t['date']} {task_time_str}", "%Y-%m-%d %H:%M")
-                    end_dt = start_dt + timedelta(minutes=duration_to_minutes(t.get("duration", "1 hour")))
-                    if now_dt > end_dt:
-                        reconcile_tasks.append(t)
-                except Exception:
-                    pass
-
         week_date_strs = [d.strftime("%Y-%m-%d") for d in visible_week_dates]
         placeholders = ",".join("?" for _ in week_date_strs) if week_date_strs else "''"
         tasks = conn.execute(
@@ -289,47 +290,47 @@ def dashboard():
             [user_id] + week_date_strs if week_date_strs else [user_id]
         ).fetchall()
 
+        all_user_tasks = conn.execute("SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,)).fetchall()
         total_tasks = len(all_user_tasks)
-        done_ontime = sum(1 for t in all_user_tasks if t["status"] == "completed")
-        done_late = sum(1 for t in all_user_tasks if t["status"] == "completed_late")
+        done_tasks = sum(1 for t in all_user_tasks if t["status"] == "completed")
         pushed_tasks = sum(1 for t in all_user_tasks if t["status"] == "rescheduled")
         missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
         undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
 
-        # Behavioral Health Index (BHI) Calculation
-        total_eval = done_ontime + done_late + pushed_tasks + missed_tasks
-        if total_eval == 0:
-            bhi_score = 100
-            bhi_tier = "Disciplined Execution"
-            bhi_color = "#16a34a"
+        # Defensible Behavioral Health Index Formula
+        # Positive credit for done, mild deduction for push, heavier deduction for miss
+        if total_tasks > 0:
+            score_raw = ((done_tasks * 1.0) + (pushed_tasks * 0.4) - (missed_tasks * 0.6)) / total_tasks * 100
+            bhi_score = max(0, min(100, round(score_raw, 1)))
         else:
-            raw_score = ((done_ontime * 1.0 + done_late * 0.8 + pushed_tasks * 0.4) / total_eval) * 100 - ((missed_tasks * 60) / total_eval)
-            bhi_score = max(0, min(100, round(raw_score)))
-            if bhi_score >= 80:
-                bhi_tier = "Disciplined Execution"
-                bhi_color = "#16a34a"
-            elif bhi_score >= 50:
-                bhi_tier = "Drifting / Procrastinating"
-                bhi_color = "#eab308"
-            else:
-                bhi_tier = "Acute Avoidance / Stalled"
-                bhi_color = "#ef4444"
+            bhi_score = 100.0
 
-        # 14-day chronological chart points
-        chart_labels, chart_ontime, chart_late, chart_pushed, chart_missed, chart_rate = [], [], [], [], [], []
+        if bhi_score >= 80:
+            bhi_tier = "Disciplined"
+            bhi_color = "#16a34a"
+        elif bhi_score >= 50:
+            bhi_tier = "Drifting"
+            bhi_color = "#eab308"
+        else:
+            bhi_tier = "Avoidance"
+            bhi_color = "#ef4444"
+
+        # Chronological 14-day history for Chart.js
+        chart_labels = []
+        chart_completed = []
+        chart_pushed = []
+        chart_missed = []
+        chart_rate = []
         for i in range(13, -1, -1):
             day_cursor = (today - timedelta(days=i)).strftime("%Y-%m-%d")
             chart_labels.append((today - timedelta(days=i)).strftime("%d %b"))
             day_tasks = [t for t in all_user_tasks if t["date"] == day_cursor]
-            c_on = sum(1 for t in day_tasks if t["status"] == "completed")
-            c_lt = sum(1 for t in day_tasks if t["status"] == "completed_late")
+            c_cnt = sum(1 for t in day_tasks if t["status"] == "completed")
             p_cnt = sum(1 for t in day_tasks if t["status"] == "rescheduled")
             m_cnt = sum(1 for t in day_tasks if t["status"] == "missed")
             t_cnt = len(day_tasks)
-            rate = round(((c_on + c_lt) / t_cnt * 100), 1) if t_cnt > 0 else 0
-
-            chart_ontime.append(c_on)
-            chart_late.append(c_lt)
+            rate = round((c_cnt / t_cnt * 100), 1) if t_cnt > 0 else 0
+            chart_completed.append(c_cnt)
             chart_pushed.append(p_cnt)
             chart_missed.append(m_cnt)
             chart_rate.append(rate)
@@ -340,8 +341,7 @@ def dashboard():
         theme=theme,
         priorities=priorities,
         tasks=[dict(t) for t in tasks],
-        all_tasks=all_user_tasks,
-        reconcile_tasks=reconcile_tasks,
+        all_tasks=[dict(t) for t in all_user_tasks],
         week_dates=visible_week_dates,
         prev_week=prev_week,
         next_week=next_week,
@@ -349,7 +349,7 @@ def dashboard():
         time_slots=TIME_SLOTS,
         metrics={
             "total": total_tasks,
-            "done": done_ontime + done_late,
+            "done": done_tasks,
             "undone": undone_tasks,
             "pushed": pushed_tasks,
             "missed": missed_tasks,
@@ -359,8 +359,7 @@ def dashboard():
         },
         chart_data={
             "labels": chart_labels,
-            "ontime": chart_ontime,
-            "late": chart_late,
+            "completed": chart_completed,
             "pushed": chart_pushed,
             "missed": chart_missed,
             "rate": chart_rate
@@ -369,10 +368,13 @@ def dashboard():
 
 @app.route("/api/task/add", methods=["POST"])
 def add_task():
-    if "user_id" not in session: return jsonify({"error": "Unauthorized"}), 401
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
     time_val = data.get("time", "09:00")
-    if len(time_val) == 4: time_val = "0" + time_val
+    if len(time_val) == 4:
+        time_val = "0" + time_val
+
     with get_db() as conn:
         conn.execute(
             "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
@@ -383,28 +385,59 @@ def add_task():
 
 @app.route("/api/task/status", methods=["POST"])
 def update_status():
-    if "user_id" not in session: return jsonify({"error": "Unauthorized"}), 401
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
+    task_id = data.get("task_id")
+    target_status = data.get("status")
+
     with get_db() as conn:
-        conn.execute("UPDATE tasks SET status = ? WHERE id = ? AND user_id = ?", (data.get("status"), data.get("task_id"), session["user_id"]))
+        task = conn.execute("SELECT * FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"])).fetchone()
+        if not task:
+            return jsonify({"error": "Not found"}), 404
+
+        # Strict Accountability: If already missed, do not allow switching back to completed
+        if task["status"] == "missed" and target_status == "completed":
+            return jsonify({"error": "Missed tasks are permanently locked and cannot be marked done."}), 400
+
+        conn.execute("UPDATE tasks SET status = ? WHERE id = ? AND user_id = ?", (target_status, task_id, session["user_id"]))
         conn.commit()
     return jsonify({"status": "success"})
 
 @app.route("/api/task/reschedule", methods=["POST"])
 def reschedule_task():
-    if "user_id" not in session: return jsonify({"error": "Unauthorized"}), 401
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
+    task_id = data.get("task_id")
+    new_date = data.get("new_date")
+    new_time = data.get("new_time")
+
     with get_db() as conn:
-        conn.execute(
-            "UPDATE tasks SET date = ?, time = ?, status = 'rescheduled' WHERE id = ? AND user_id = ?",
-            (data.get("new_date"), data.get("new_time"), data.get("task_id"), session["user_id"])
-        )
+        task = conn.execute("SELECT * FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"])).fetchone()
+        if not task:
+            return jsonify({"error": "Not found"}), 404
+
+        # Option A Strict Accountability:
+        # If task is already missed, retain the original record as missed and create a new replacement task
+        if task["status"] == "missed":
+            conn.execute(
+                "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                (session["user_id"], task["title"], task["detail"], task["location"], new_date, new_time, task["duration"], task["priority_id"])
+            )
+        else:
+            # Active task pushed ahead of time
+            conn.execute(
+                "UPDATE tasks SET date = ?, time = ?, status = 'rescheduled' WHERE id = ? AND user_id = ?",
+                (new_date, new_time, task_id, session["user_id"])
+            )
         conn.commit()
     return jsonify({"status": "success"})
 
 @app.route("/api/task/delete", methods=["POST"])
 def delete_task():
-    if "user_id" not in session: return jsonify({"error": "Unauthorized"}), 401
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
     with get_db() as conn:
         conn.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (data.get("task_id"), session["user_id"]))

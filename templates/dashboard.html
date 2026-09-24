@@ -52,7 +52,7 @@
       transition: background 0.15s ease, color 0.15s ease;
     }
 
-    /* Floating Sliding Sidebar Drawer */
+    /* Sliding Drawer */
     .sidebar {
       width: 330px;
       min-width: 330px;
@@ -158,7 +158,6 @@
       transition: all 0.25s ease;
     }
 
-    /* Top Nav */
     .top-nav {
       display: flex;
       justify-content: space-between;
@@ -202,7 +201,6 @@
     .nav-btn:hover { background: var(--slot-hover); }
     .week-title { font-size: 1rem; font-weight: 700; color: var(--text); }
 
-    /* Profile Hub */
     .right-controls { display: flex; align-items: center; gap: 0.75rem; }
     .profile-hub {
       position: relative;
@@ -273,7 +271,7 @@
     .dropdown-divider { height: 1px; background: var(--border); margin: 0.25rem 0; }
     .dropdown-item.danger { color: #ef4444; }
 
-    /* Reconciliation Check-in Banner */
+    /* Reconciliation Banner */
     .reconciliation-banner {
       background: rgba(234, 179, 8, 0.12);
       border: 1px solid rgba(234, 179, 8, 0.4);
@@ -409,7 +407,12 @@
     .task-card:hover { transform: scale(1.02); }
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
     .task-card.rescheduled { outline: 2px dashed #ea580c; }
-    .task-card.missed { border: 2px solid #ef4444; }
+    /* Missed task visual distinction */
+    .task-card.missed {
+      border: 2px solid #ef4444;
+      opacity: 0.85;
+      box-shadow: 0 0 5px rgba(239, 68, 68, 0.4);
+    }
     .card-title { font-weight: bold; font-size: 0.75rem; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
     .card-detail { font-size: 0.68rem; margin-top: 2px; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }
     .card-location { font-size: 0.65rem; margin-top: 2px; font-style: italic; opacity: 0.95; }
@@ -485,7 +488,7 @@
 </head>
 <body>
 
-  <!-- Floating Sliding Sidebar Drawer -->
+  <!-- Sliding Sidebar Drawer -->
   <aside class="sidebar" id="taskSidebar">
     <div class="sidebar-header">
       <div class="panel-title">Add New Task</div>
@@ -595,7 +598,7 @@
       <div id="reconcileList"></div>
     </div>
 
-    <!-- Anti-Procrastination Metrics Bar (Includes Behavior Index) -->
+    <!-- Anti-Procrastination Metrics Bar -->
     <div class="metrics-bar">
       <div class="metric-card" onclick="openTaskModal('all')">
         <div class="metric-label">Total Planned</div>
@@ -688,10 +691,15 @@
                       <div class="card-location">📍 {{ task.location }}</div>
                       {% endif %}
                       <div class="card-actions" onclick="event.stopPropagation()">
+                        <!-- Option A Strict Accountability: If missed, Done is completely removed -->
+                        {% if task.status != 'missed' %}
                         <button class="action-btn" onclick="toggleComplete({{ task.id }}, '{{ task.status }}')">
                           {{ 'Undo' if task.status == 'completed' else 'Done' }}
                         </button>
-                        <button class="action-btn" style="color: #fb923c;" onclick="rescheduleTask({{ task.id }})">Push</button>
+                        {% endif %}
+                        <button class="action-btn" style="color: #fb923c;" onclick="rescheduleTask({{ task.id }})">
+                          {{ 'Reschedule' if task.status == 'missed' else 'Push' }}
+                        </button>
                         <button class="action-btn" style="color: #cbd5e1;" onclick="deleteTask({{ task.id }})">✕</button>
                       </div>
                     </div>
@@ -757,7 +765,7 @@
     </div>
   </div>
 
-  <!-- Modal 3: Metric Card Tasks Table with Direct Print & Download PDF -->
+  <!-- Modal 3: Metric Card Tasks Table -->
   <div class="modal-overlay" id="listModal">
     <div class="modal-content" style="width: 780px;">
       <div class="modal-header">
@@ -792,7 +800,6 @@
     const allPriorities = {{ priorities|tojson }};
     const chartData = {{ chart_data|tojson }};
 
-    // Reconciliation Check-in on Page Load
     function initReconciliation() {
       const now = new Date();
       const overduePending = allUserTasks.filter(t => {
@@ -839,7 +846,6 @@
 
     window.addEventListener('DOMContentLoaded', initReconciliation);
 
-    // Expandable Behavioral Analytics Chart
     let chartInstance = null;
     function toggleAnalyticsPanel() {
       const panel = document.getElementById('analyticsPanel');
@@ -910,7 +916,6 @@
       }
     }
 
-    // Modal List Direct Print & PDF
     function printModalTable() {
       const area = document.getElementById('modalPrintArea').innerHTML;
       const title = document.getElementById('modalTitle').innerText;
@@ -1138,7 +1143,7 @@
         title.innerText = 'Pushed (Rescheduled) Tasks';
         filtered = allUserTasks.filter(t => t.status === 'rescheduled');
       } else if (filter === 'missed') {
-        title.innerText = 'Missed Tasks';
+        title.innerText = 'Missed Tasks (Locked History)';
         filtered = allUserTasks.filter(t => t.status === 'missed');
       } else {
         title.innerText = 'All Scheduled Tasks';
@@ -1150,15 +1155,21 @@
         filtered.forEach(t => {
           const prio = allPriorities.find(p => p.id === t.priority_id) || { label: 'Standard', color: '#0284c7' };
           const row = document.createElement('tr');
+          
+          let actionHtml = '';
+          if (t.status === 'missed') {
+            actionHtml = `<button class="action-btn" style="color: #fb923c;" onclick="rescheduleTask(${t.id})">Reschedule</button>`;
+          } else {
+            actionHtml = `<button class="action-btn" onclick="toggleComplete(${t.id}, '${t.status}')">${t.status === 'completed' ? 'Undo' : 'Done'}</button>`;
+          }
+
           row.innerHTML = `
             <td>${t.date}</td>
             <td>${t.time}</td>
             <td><b>${t.title}</b> ${t.detail ? '<br><small style="color: var(--metric-muted);">' + t.detail + '</small>' : ''} ${t.location ? '<br><small>📍 ' + t.location + '</small>' : ''}</td>
             <td><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${prio.color}; margin-right: 6px;"></span>${prio.label}</td>
             <td><span style="text-transform: capitalize;">${t.status}</span></td>
-            <td>
-              <button class="action-btn" onclick="toggleComplete(${t.id}, '${t.status}')">${t.status === 'completed' ? 'Undo' : 'Done'}</button>
-            </td>
+            <td>${actionHtml}</td>
           `;
           tbody.appendChild(row);
         });
@@ -1194,17 +1205,32 @@
     }
 
     async function toggleComplete(taskId, currentStatus) {
+      if (currentStatus === 'missed') {
+        alert("Missed tasks are permanently locked and cannot be marked done.");
+        return;
+      }
       const nextStatus = currentStatus === 'completed' ? 'pending' : 'completed';
-      await fetch('/api/task/status', {
+      const res = await fetch('/api/task/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id: taskId, status: nextStatus })
       });
-      location.reload();
+      if (res.ok) {
+        location.reload();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Action not allowed.");
+      }
     }
 
     async function rescheduleTask(taskId) {
-      const new_date = prompt("Reschedule (push) to which date? (YYYY-MM-DD):", "{{ cur_week_str }}");
+      const task = allUserTasks.find(t => t.id === taskId);
+      const isMissed = task && task.status === 'missed';
+      const promptText = isMissed 
+        ? "Reschedule this missed task as a NEW commitment? Enter date (YYYY-MM-DD):" 
+        : "Push this task to which date? (YYYY-MM-DD):";
+
+      const new_date = prompt(promptText, "{{ cur_week_str }}");
       const new_time = prompt("Select new start time (e.g. 09:00, 14:00):", "09:00");
       if (new_date && new_time) {
         await fetch('/api/task/reschedule', {
