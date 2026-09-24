@@ -21,6 +21,7 @@
       --primary: #0284c7;
       --primary-hover: #0369a1;
       --metric-muted: #64748b;
+      --dropdown-shadow: rgba(0, 0, 0, 0.08);
     }
 
     [data-theme="dark"] {
@@ -34,6 +35,7 @@
       --primary: #38bdf8;
       --primary-hover: #0284c7;
       --metric-muted: #94a3b8;
+      --dropdown-shadow: rgba(0, 0, 0, 0.4);
     }
 
     * { box-sizing: border-box; }
@@ -45,34 +47,72 @@
       display: flex;
       height: 100vh;
       overflow: hidden;
+      transition: background 0.15s ease, color 0.15s ease;
     }
 
-    /* Collapsible Left Sidebar */
+    /* Floating Sliding Sidebar Drawer */
     .sidebar {
-      width: 320px;
-      min-width: 320px;
+      width: 330px;
+      min-width: 330px;
       background: var(--sidebar-bg);
       border-right: 1px solid var(--border);
       padding: 1.25rem;
       display: flex;
       flex-direction: column;
       overflow-y: auto;
-      transition: margin-left 0.25s ease, opacity 0.25s ease;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      z-index: 50;
     }
     .sidebar.collapsed {
-      margin-left: -320px;
-      opacity: 0;
+      margin-left: -330px;
       pointer-events: none;
     }
 
-    .brand { font-size: 1.2rem; font-weight: bold; color: var(--primary); margin-bottom: 0.25rem; }
-    .user-tag { font-size: 0.75rem; color: var(--metric-muted); margin-bottom: 1.25rem; display: flex; justify-content: space-between; }
-    .user-tag a { color: #ef4444; text-decoration: none; font-weight: 600; }
+    /* Sidebar Drawer Header */
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    .sidebar-header .panel-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text);
+      margin: 0;
+    }
+    .btn-close-drawer {
+      background: transparent;
+      border: none;
+      color: var(--metric-muted);
+      font-size: 1.15rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-close-drawer:hover {
+      background: var(--slot-hover);
+      color: #ef4444;
+    }
 
-    .panel-title { font-size: 0.85rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: var(--metric-muted); margin-bottom: 0.85rem; }
-    .form-group { margin-bottom: 0.75rem; }
-    .form-group label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; color: var(--text); }
-    
+    .form-group { margin-bottom: 0.85rem; }
+    .form-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: var(--text);
+    }
     .form-group input, .form-group select {
       width: 100%;
       padding: 0.55rem;
@@ -83,7 +123,7 @@
       color: var(--text);
     }
 
-    /* Fixed Dark Mode Calendar & Time/Clock Icons */
+    /* Inverted Calendar and Clock Pickers for Dark Mode */
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="time"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
@@ -101,68 +141,161 @@
       background: var(--primary);
       color: white;
       border: none;
-      padding: 0.65rem;
+      padding: 0.7rem;
       border-radius: 6px;
-      font-weight: bold;
+      font-weight: 700;
       font-size: 0.85rem;
       cursor: pointer;
       margin-top: 0.5rem;
+      transition: background 0.15s ease;
     }
     .btn-create:hover { background: var(--primary-hover); }
 
-    /* Main Content Area */
+    /* Main Area */
     .main-content {
       flex: 1;
       padding: 1.25rem;
       display: flex;
       flex-direction: column;
       overflow-y: auto;
-      transition: width 0.25s ease;
+      transition: all 0.25s ease;
     }
 
+    /* Header Navigation */
     .top-nav {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
-      gap: 0.75rem;
+      gap: 1rem;
     }
     .left-controls {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.65rem;
     }
 
-    /* Hamburger Toggle Button */
-    .btn-toggle-sidebar {
+    .btn-hamburger {
       background: var(--card-bg);
       border: 1px solid var(--border);
       color: var(--text);
       border-radius: 6px;
-      padding: 0.45rem 0.65rem;
+      padding: 0.42rem 0.65rem;
       cursor: pointer;
-      font-size: 1rem;
+      font-size: 1.1rem;
       display: flex;
       align-items: center;
       justify-content: center;
       line-height: 1;
+      transition: background 0.15s ease;
     }
-    .btn-toggle-sidebar:hover { background: var(--slot-hover); }
+    .btn-hamburger:hover { background: var(--slot-hover); }
+    .btn-hamburger.hidden { display: none; }
 
-    .week-nav { display: flex; align-items: center; gap: 0.5rem; }
+    .week-nav { display: flex; align-items: center; gap: 0.35rem; }
     .nav-btn {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      padding: 0.4rem 0.75rem;
+      padding: 0.42rem 0.75rem;
       border-radius: 6px;
       font-size: 0.8rem;
       text-decoration: none;
       color: var(--text);
       font-weight: 600;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: background 0.15s ease;
     }
     .nav-btn:hover { background: var(--slot-hover); }
-    .week-title { font-size: 0.95rem; font-weight: bold; }
+    .week-title { font-size: 1rem; font-weight: 700; color: var(--text); }
+
+    /* Right Header: Profile Hub & Dropdown */
+    .right-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .profile-hub {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      cursor: pointer;
+      padding: 0.35rem 0.5rem;
+      border-radius: 8px;
+      transition: background 0.15s ease;
+      user-select: none;
+    }
+    .profile-hub:hover { background: var(--slot-hover); }
+    .brand-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--primary);
+      text-align: right;
+      line-height: 1.1;
+    }
+    .brand-user {
+      font-size: 0.75rem;
+      color: var(--metric-muted);
+      font-weight: 500;
+    }
+    .avatar-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border: 2px solid var(--border);
+    }
+
+    /* Sleek User Profile Dropdown Menu */
+    .profile-dropdown {
+      display: none;
+      position: absolute;
+      top: 115%;
+      right: 0;
+      width: 220px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 10px 25px var(--dropdown-shadow);
+      padding: 0.5rem;
+      z-index: 100;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .profile-dropdown.open { display: flex; }
+    .dropdown-item {
+      padding: 0.55rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      width: 100%;
+      font-weight: 500;
+      text-align: left;
+    }
+    .dropdown-item:hover { background: var(--slot-hover); }
+    .dropdown-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.25rem 0;
+    }
+    .dropdown-item.danger { color: #ef4444; }
+    .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); }
 
     /* Anti-Procrastination Metrics Bar */
     .metrics-bar {
@@ -296,15 +429,13 @@
 </head>
 <body>
 
-  <!-- Collapsible Left Sidebar -->
+  <!-- Floating Sliding Sidebar Drawer -->
   <aside class="sidebar" id="taskSidebar">
-    <div class="brand">Priority Planner</div>
-    <div class="user-tag">
-      <span>Logged in: <b>{{ username }}</b></span>
-      <a href="/logout">Log Out</a>
+    <div class="sidebar-header">
+      <div class="panel-title">Add New Task</div>
+      <!-- Internal X button that closes drawer and brings back hamburger -->
+      <button class="btn-close-drawer" onclick="toggleSidebar(false)" title="Close Drawer">✕</button>
     </div>
-
-    <div class="panel-title">Add New Task</div>
 
     <div class="form-group">
       <label>1. Date (Click to choose)</label>
@@ -358,8 +489,8 @@
   <main class="main-content">
     <div class="top-nav">
       <div class="left-controls">
-        <!-- Hamburger Icon Button to Open/Close Sidebar -->
-        <button class="btn-toggle-sidebar" onclick="toggleSidebar()" title="Toggle Task Sidebar">
+        <!-- Hamburger Button (Appears only when panel is closed) -->
+        <button class="btn-hamburger" id="btnHamburger" onclick="toggleSidebar(true)" title="Open Task Drawer">
           ☰
         </button>
         <div class="week-nav">
@@ -368,10 +499,35 @@
           <a href="/dashboard?week_start={{ next_week }}" class="nav-btn">Next Week →</a>
         </div>
       </div>
+
       <div class="week-title">Week of {{ week_dates[0].strftime("%B %d, %Y") }}</div>
-      <div>
-        <a href="/settings" class="nav-btn">⚙️ Settings</a>
+
+      <!-- Right Header Profile & Action Hub -->
+      <div class="right-controls">
         <button class="nav-btn" onclick="window.print()">Export / Print</button>
+        
+        <div class="profile-hub" id="profileHub" onclick="toggleProfileDropdown(event)">
+          <div style="text-align: right;">
+            <div class="brand-title">Priority Planner</div>
+            <div class="brand-user">{{ username }}</div>
+          </div>
+          <div class="avatar-badge">{{ username[:1].upper() }}</div>
+
+          <!-- Sleek Profile Dropdown -->
+          <div class="profile-dropdown" id="profileDropdown">
+            <button type="button" class="dropdown-item" onclick="toggleThemeQuick()">
+              <span id="themeDropText">🌙 Switch to Dark</span>
+              <span>🌓</span>
+            </button>
+            <a href="/settings" class="dropdown-item">
+              <span>⚙️ Settings & Priorities</span>
+            </a>
+            <div class="dropdown-divider"></div>
+            <a href="/logout" class="dropdown-item danger">
+              <span>🚪 Log Out</span>
+            </a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -509,16 +665,67 @@
     const currentWeekTasks = {{ tasks|tojson }};
     const allPriorities = {{ priorities|tojson }};
 
-    function toggleSidebar() {
+    // Sidebar drawer toggle logic
+    function toggleSidebar(open) {
       const sidebar = document.getElementById('taskSidebar');
-      sidebar.classList.toggle('collapsed');
-      localStorage.setItem('planner-sidebar-collapsed', sidebar.classList.contains('collapsed'));
+      const burger = document.getElementById('btnHamburger');
+
+      if (open) {
+        sidebar.classList.remove('collapsed');
+        burger.classList.add('hidden');
+        localStorage.setItem('planner-sidebar-collapsed', 'false');
+      } else {
+        sidebar.classList.add('collapsed');
+        burger.classList.remove('hidden');
+        localStorage.setItem('planner-sidebar-collapsed', 'true');
+      }
     }
 
-    // Restore sidebar state
-    if (localStorage.getItem('planner-sidebar-collapsed') === 'true') {
+    // Initialize sidebar state on page load
+    const isCollapsed = localStorage.getItem('planner-sidebar-collapsed') === 'true';
+    if (isCollapsed) {
       document.getElementById('taskSidebar').classList.add('collapsed');
+      document.getElementById('btnHamburger').classList.remove('hidden');
+    } else {
+      document.getElementById('taskSidebar').classList.remove('collapsed');
+      document.getElementById('btnHamburger').classList.add('hidden');
     }
+
+    // Profile Dropdown Toggle
+    function toggleProfileDropdown(e) {
+      e.stopPropagation();
+      const drop = document.getElementById('profileDropdown');
+      drop.classList.toggle('open');
+      updateThemeDropText();
+    }
+
+    function updateThemeDropText() {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.getElementById('themeDropText').innerText = isDark ? '☀️ Switch to Light' : '🌙 Switch to Dark';
+    }
+
+    function toggleThemeQuick() {
+      const cur = document.documentElement.getAttribute('data-theme') || 'light';
+      const nextTheme = cur === 'dark' ? 'light' : 'dark';
+      
+      document.documentElement.setAttribute('data-theme', nextTheme);
+      localStorage.setItem('planner-theme', nextTheme);
+      updateThemeDropText();
+
+      fetch('/api/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: nextTheme })
+      });
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      const drop = document.getElementById('profileDropdown');
+      if (drop && !drop.contains(e.target)) {
+        drop.classList.remove('open');
+      }
+    });
 
     function showTaskDetail(taskId) {
       const task = allUserTasks.find(t => t.id === taskId);
