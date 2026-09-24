@@ -427,7 +427,7 @@
     }
     .action-btn:hover { background: rgba(15, 23, 42, 0.95); }
 
-    /* Modern Redesigned Task List Modal */
+    /* Modals Generic */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -459,7 +459,7 @@
       padding-bottom: 0.75rem;
     }
 
-    /* Fixed-Width Compact Table to Eliminate Horizontal Scrolling */
+    /* Fixed-Width Compact Table */
     .modal-table {
       width: 100%;
       border-collapse: separate;
@@ -485,18 +485,14 @@
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
-    .modal-table tbody tr:hover {
-      background: var(--slot-hover);
-    }
+    .modal-table tbody tr:hover { background: var(--slot-hover); }
 
-    /* Specific Width Allocations */
     .col-time { width: 15%; }
     .col-task { width: 37%; }
     .col-priority { width: 23%; }
     .col-status { width: 11%; }
     .col-action { width: 14%; text-align: right; }
 
-    /* Modern Table Elements */
     .status-pill {
       display: inline-block;
       padding: 0.2rem 0.45rem;
@@ -520,23 +516,11 @@
       transition: all 0.15s ease;
       white-space: nowrap;
     }
-    .tbl-action-btn.reschedule {
-      background: #ea580c;
-      color: #ffffff;
-    }
+    .tbl-action-btn.reschedule { background: #ea580c; color: #ffffff; }
     .tbl-action-btn.reschedule:hover { background: #c2410c; }
-    
-    .tbl-action-btn.done {
-      background: #16a34a;
-      color: #ffffff;
-    }
+    .tbl-action-btn.done { background: #16a34a; color: #ffffff; }
     .tbl-action-btn.done:hover { background: #15803d; }
-    
-    .tbl-action-btn.undo {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
+    .tbl-action-btn.undo { background: transparent; border: 1px solid var(--border); color: var(--text); }
 
     .detail-row { margin-bottom: 0.75rem; font-size: 0.85rem; }
     .detail-row b {
@@ -766,7 +750,7 @@
                           {{ 'Undo' if task.status == 'completed' else 'Done' }}
                         </button>
                         {% endif %}
-                        <button class="action-btn" style="color: #fb923c;" onclick="rescheduleTask({{ task.id }})">
+                        <button class="action-btn" style="color: #fb923c;" onclick="openRescheduleModal({{ task.id }})">
                           {{ 'Reschedule' if task.status == 'missed' else 'Push' }}
                         </button>
                         <button class="action-btn" style="color: #cbd5e1;" onclick="deleteTask({{ task.id }})">✕</button>
@@ -834,7 +818,7 @@
     </div>
   </div>
 
-  <!-- Modal 3: Redesigned Modern Task List Modal (Zero Horizontal Scrolling) -->
+  <!-- Modal 3: Redesigned Task List Modal -->
   <div class="modal-overlay" id="listModal">
     <div class="modal-content">
       <div class="modal-header">
@@ -858,6 +842,43 @@
           </thead>
           <tbody id="modalTableBody"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Clean Custom In-App Reschedule / Push Modal (Replaces browser prompt) -->
+  <div class="modal-overlay" id="rescheduleModal" style="z-index: 1001;">
+    <div class="modal-content" style="width: 440px;">
+      <div class="modal-header">
+        <h3 id="rescheduleHeaderTitle" style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #ea580c;">
+          📅 Reschedule Task
+        </h3>
+        <button class="nav-btn" onclick="closeRescheduleModal()">✕</button>
+      </div>
+      
+      <p id="rescheduleSubtitle" style="font-size: 0.8rem; color: var(--metric-muted); margin-top: -0.5rem; margin-bottom: 1rem; line-height: 1.4;">
+        Choose a new scheduled date and start time.
+      </p>
+
+      <input type="hidden" id="rescheduleTaskId">
+
+      <div class="form-group">
+        <label>New Scheduled Date</label>
+        <input type="date" id="rescheduleDate" value="{{ cur_week_str }}" onclick="this.showPicker()">
+      </div>
+
+      <div class="form-group">
+        <label>New Start Time</label>
+        <input type="time" id="rescheduleTime" value="09:00" onclick="this.showPicker()">
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+        <button type="button" class="btn-create" style="background: transparent; border: 1px solid var(--border); color: var(--text);" onclick="closeRescheduleModal()">
+          Cancel
+        </button>
+        <button type="button" class="btn-create" style="background: #ea580c;" onclick="submitReschedule()">
+          Confirm Reschedule
+        </button>
       </div>
     </div>
   </div>
@@ -894,7 +915,7 @@
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #16a34a;" onclick="resolveReconciliation(${t.id}, 'completed')">Done On Time</button>
             <button class="btn-rec" style="color: #0284c7;" onclick="resolveReconciliation(${t.id}, 'completed')">Done Late</button>
-            <button class="btn-rec" style="color: #ea580c;" onclick="rescheduleTask(${t.id})">Push</button>
+            <button class="btn-rec" style="color: #ea580c;" onclick="openRescheduleModal(${t.id})">Push</button>
             <button class="btn-rec" style="color: #ef4444;" onclick="resolveReconciliation(${t.id}, 'missed')">Missed</button>
           </div>
         `;
@@ -1194,6 +1215,56 @@
       document.getElementById('detailModal').style.display = 'none';
     }
 
+    /* Modal 4: Clean In-App Reschedule Functions */
+    function openRescheduleModal(taskId) {
+      const task = allUserTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      document.getElementById('rescheduleTaskId').value = taskId;
+      document.getElementById('rescheduleDate').value = task.date || "{{ cur_week_str }}";
+      document.getElementById('rescheduleTime').value = task.time || "09:00";
+
+      const titleEl = document.getElementById('rescheduleHeaderTitle');
+      const subtitleEl = document.getElementById('rescheduleSubtitle');
+
+      if (task.status === 'missed') {
+        titleEl.innerText = "🔁 Reschedule Missed Task";
+        subtitleEl.innerText = `"${task.title}" will stay on record as missed, and a new pending task will be scheduled.`;
+      } else {
+        titleEl.innerText = "📅 Push / Reschedule Task";
+        subtitleEl.innerText = `Move "${task.title}" forward to a new time.`;
+      }
+
+      document.getElementById('rescheduleModal').style.display = 'flex';
+    }
+
+    function closeRescheduleModal() {
+      document.getElementById('rescheduleModal').style.display = 'none';
+    }
+
+    async function submitReschedule() {
+      const taskId = document.getElementById('rescheduleTaskId').value;
+      const new_date = document.getElementById('rescheduleDate').value;
+      const new_time = document.getElementById('rescheduleTime').value;
+
+      if (!new_date || !new_time) {
+        alert("Please pick both a date and a start time.");
+        return;
+      }
+
+      const res = await fetch('/api/task/reschedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, new_date, new_time })
+      });
+
+      if (res.ok) {
+        location.reload();
+      } else {
+        alert("Failed to reschedule task.");
+      }
+    }
+
     function openTaskModal(filter) {
       const modal = document.getElementById('listModal');
       const title = document.getElementById('modalTitle');
@@ -1226,7 +1297,7 @@
           
           let actionHtml = '';
           if (t.status === 'missed') {
-            actionHtml = `<button class="tbl-action-btn reschedule" onclick="rescheduleTask(${t.id})">Reschedule</button>`;
+            actionHtml = `<button class="tbl-action-btn reschedule" onclick="openRescheduleModal(${t.id})">Reschedule</button>`;
           } else if (t.status === 'completed') {
             actionHtml = `<button class="tbl-action-btn undo" onclick="toggleComplete(${t.id}, '${t.status}')">Undo</button>`;
           } else {
@@ -1305,25 +1376,6 @@
       } else {
         const err = await res.json();
         alert(err.error || "Action not allowed.");
-      }
-    }
-
-    async function rescheduleTask(taskId) {
-      const task = allUserTasks.find(t => t.id === taskId);
-      const isMissed = task && task.status === 'missed';
-      const promptText = isMissed 
-        ? "Reschedule this missed task as a NEW commitment? Enter date (YYYY-MM-DD):" 
-        : "Push this task to which date? (YYYY-MM-DD):";
-
-      const new_date = prompt(promptText, "{{ cur_week_str }}");
-      const new_time = prompt("Select new start time (e.g. 09:00, 14:00):", "09:00");
-      if (new_date && new_time) {
-        await fetch('/api/task/reschedule', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_id: taskId, new_date, new_time })
-        });
-        location.reload();
       }
     }
 
