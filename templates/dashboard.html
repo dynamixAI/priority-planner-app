@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Weekly Priority Planner & Execution Dashboard</title>
-  <!-- html2pdf.js for generating full-color client-side PDFs -->
+  <!-- Chart.js for Anti-Procrastination Visual Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- html2pdf.js for Generating Color PDFs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script>
     const cachedTheme = localStorage.getItem('planner-theme');
@@ -62,7 +64,7 @@
       display: flex;
       flex-direction: column;
       overflow-y: auto;
-      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       z-index: 50;
     }
@@ -101,10 +103,7 @@
       border-radius: 6px;
       transition: all 0.15s ease;
     }
-    .btn-close-drawer:hover {
-      background: var(--slot-hover);
-      color: #ef4444;
-    }
+    .btn-close-drawer:hover { background: var(--slot-hover); color: #ef4444; }
 
     .form-group { margin-bottom: 0.85rem; }
     .form-group label {
@@ -169,11 +168,7 @@
       margin-bottom: 1rem;
       gap: 1rem;
     }
-    .left-controls {
-      display: flex;
-      align-items: center;
-      gap: 0.65rem;
-    }
+    .left-controls { display: flex; align-items: center; gap: 0.65rem; }
 
     .btn-hamburger {
       background: var(--card-bg);
@@ -187,7 +182,6 @@
       align-items: center;
       justify-content: center;
       line-height: 1;
-      transition: background 0.15s ease;
     }
     .btn-hamburger:hover { background: var(--slot-hover); }
     .btn-hamburger.hidden { display: none; }
@@ -206,17 +200,12 @@
       display: flex;
       align-items: center;
       gap: 0.35rem;
-      transition: background 0.15s ease;
     }
     .nav-btn:hover { background: var(--slot-hover); }
     .week-title { font-size: 1rem; font-weight: 700; color: var(--text); }
 
-    /* Right Header: Profile Hub */
-    .right-controls {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
+    /* Profile Hub */
+    .right-controls { display: flex; align-items: center; gap: 0.75rem; }
     .profile-hub {
       position: relative;
       display: flex;
@@ -225,7 +214,6 @@
       cursor: pointer;
       padding: 0.35rem 0.5rem;
       border-radius: 8px;
-      transition: background 0.15s ease;
       user-select: none;
     }
     .profile-hub:hover { background: var(--slot-hover); }
@@ -236,11 +224,7 @@
       text-align: right;
       line-height: 1.1;
     }
-    .brand-user {
-      font-size: 0.75rem;
-      color: var(--metric-muted);
-      font-weight: 500;
-    }
+    .brand-user { font-size: 0.75rem; color: var(--metric-muted); font-weight: 500; }
     .avatar-badge {
       width: 36px;
       height: 36px;
@@ -255,7 +239,6 @@
       border: 2px solid var(--border);
     }
 
-    /* Profile Dropdown */
     .profile-dropdown {
       display: none;
       position: absolute;
@@ -289,20 +272,15 @@
       text-align: left;
     }
     .dropdown-item:hover { background: var(--slot-hover); }
-    .dropdown-divider {
-      height: 1px;
-      background: var(--border);
-      margin: 0.25rem 0;
-    }
+    .dropdown-divider { height: 1px; background: var(--border); margin: 0.25rem 0; }
     .dropdown-item.danger { color: #ef4444; }
-    .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); }
 
     /* Anti-Procrastination Metrics Bar */
     .metrics-bar {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 0.75rem;
-      margin-bottom: 1rem;
+      margin-bottom: 0.85rem;
     }
     .metric-card {
       background: var(--card-bg);
@@ -319,6 +297,32 @@
     }
     .metric-label { font-size: 0.68rem; text-transform: uppercase; color: var(--metric-muted); font-weight: bold; }
     .metric-num { font-size: 1.35rem; font-weight: bold; margin-top: 0.2rem; }
+
+    /* Option A: Expandable Behavioral Analytics Card */
+    .analytics-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .analytics-header {
+      padding: 0.6rem 0.85rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      background: var(--table-header);
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: var(--text);
+    }
+    .analytics-body {
+      padding: 1rem;
+      display: block;
+      height: 240px;
+    }
+    .analytics-body.collapsed { display: none; }
 
     /* Priority Legend */
     .legend-bar {
@@ -343,7 +347,7 @@
       overflow-x: auto;
       flex: 1;
     }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1050px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 900px; }
     th, td { border: 1px solid var(--border); text-align: center; vertical-align: top; padding: 0.35rem; }
     th { background: var(--table-header); font-size: 0.75rem; font-weight: bold; color: var(--text); }
     .time-col { width: 75px; font-weight: bold; background: var(--table-header); font-size: 0.75rem; color: var(--metric-muted); }
@@ -380,7 +384,7 @@
     }
     .action-btn:hover { background: rgba(15, 23, 42, 0.95); }
 
-    /* Modals Generic */
+    /* Modals */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -428,32 +432,13 @@
       margin-bottom: 0.2rem;
     }
 
-    /* Print Stylesheet: Preserves exact colors and layout */
     @media print {
       @page { size: landscape; margin: 10mm; }
-      body {
-        height: auto !important;
-        overflow: visible !important;
-        background: #ffffff !important;
-        color: #000000 !important;
-      }
-      .sidebar, .top-nav, .card-actions, .modal-overlay, .profile-dropdown {
-        display: none !important;
-      }
-      .main-content {
-        padding: 0 !important;
-        overflow: visible !important;
-      }
-      .grid-container {
-        border: 1px solid #94a3b8 !important;
-        overflow: visible !important;
-      }
+      body { height: auto !important; overflow: visible !important; background: #ffffff !important; color: #000000 !important; }
+      .sidebar, .top-nav, .card-actions, .modal-overlay, .profile-dropdown, .analytics-panel { display: none !important; }
+      .main-content { padding: 0 !important; overflow: visible !important; }
+      .grid-container { border: 1px solid #94a3b8 !important; overflow: visible !important; }
       th, td { border: 1px solid #cbd5e1 !important; }
-      .task-card {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        box-shadow: none !important;
-      }
     }
   </style>
 </head>
@@ -584,6 +569,17 @@
       </div>
     </div>
 
+    <!-- Option A: Behavioral & Execution Trends Chart Panel -->
+    <div class="analytics-panel">
+      <div class="analytics-header" onclick="toggleAnalyticsPanel()">
+        <span>📈 Behavioral Trends & Procrastination Index (Past 14 Days)</span>
+        <span id="chartToggleIcon">▲ Minimize</span>
+      </div>
+      <div class="analytics-body" id="analyticsBody">
+        <canvas id="behaviorChart"></canvas>
+      </div>
+    </div>
+
     <!-- Active Priority Key -->
     <div class="legend-bar">
       <span style="font-size: 0.75rem; font-weight: bold; color: var(--metric-muted);">Priorities:</span>
@@ -595,7 +591,7 @@
       {% endfor %}
     </div>
 
-    <!-- 7-Day & 24-Hour Timetable Grid -->
+    <!-- Timetable Grid -->
     <div class="grid-container" id="gridContainer">
       <table id="scheduleTable">
         <thead>
@@ -653,7 +649,7 @@
     </div>
   </main>
 
-  <!-- Modal 1: Export & Print Configuration Modal -->
+  <!-- Modal 1: Export & Print Configuration Modal (Updated Labels) -->
   <div class="modal-overlay" id="exportModal">
     <div class="modal-content" style="width: 480px;">
       <div class="modal-header">
@@ -664,20 +660,22 @@
       <div class="form-group">
         <label>1. Select Duration to Export</label>
         <select id="exportDuration" onchange="toggleCustomDateSelect()">
-          <option value="current">Current Viewed Week ({{ week_dates[0].strftime('%b %d') }} - {{ week_dates[6].strftime('%b %d') }})</option>
+          <option value="current">Current Viewed Week ({{ week_dates[0].strftime('%b %d') }} - {{ week_dates[-1].strftime('%b %d') }})</option>
           <option value="custom">Specific Week...</option>
         </select>
       </div>
 
+      <!-- Cleaned up label: removed (Sunday) -->
       <div class="form-group" id="customWeekBox" style="display: none;">
-        <label>Pick Specific Week Start (Sunday)</label>
+        <label>Pick Specific Week Start</label>
         <input type="date" id="exportCustomDate" value="{{ cur_week_str }}" onclick="this.showPicker()">
       </div>
 
+      <!-- Cleaned up label: removed (Eliminates empty rows) -->
       <div class="form-group">
         <label>2. Hour Span</label>
         <select id="exportHourSpan">
-          <option value="active" selected>Active Hours with Tasks Only (Eliminates empty rows)</option>
+          <option value="active" selected>Active Hours with Tasks Only</option>
           <option value="all">Full 24 Hours (00:00 - 23:00)</option>
         </select>
       </div>
@@ -704,14 +702,19 @@
     </div>
   </div>
 
-  <!-- Modal 3: Metric Card Filtered Tasks Table -->
+  <!-- Modal 3: Metric Card Tasks Table with Direct Print & Download PDF -->
   <div class="modal-overlay" id="listModal">
-    <div class="modal-content" style="width: 750px;">
+    <div class="modal-content" style="width: 780px;">
       <div class="modal-header">
         <h3 id="modalTitle" style="margin: 0; font-size: 1.1rem; color: var(--primary);">Tasks</h3>
-        <button class="nav-btn" onclick="closeTaskModal()">Close (✕)</button>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <!-- Added Direct Print & PDF buttons for this table view -->
+          <button class="nav-btn" onclick="printModalTable()">🖨️ Print List</button>
+          <button class="nav-btn" style="color: #16a34a;" onclick="downloadModalPDF()">📥 Download PDF</button>
+          <button class="nav-btn" onclick="closeTaskModal()">Close (✕)</button>
+        </div>
       </div>
-      <div style="overflow-y: auto; max-height: 60vh;">
+      <div id="modalPrintArea" style="overflow-y: auto; max-height: 60vh;">
         <table class="modal-table">
           <thead>
             <tr>
@@ -733,6 +736,110 @@
     const allUserTasks = {{ all_tasks|tojson }};
     const currentWeekTasks = {{ tasks|tojson }};
     const allPriorities = {{ priorities|tojson }};
+    const chartData = {{ chart_data|tojson }};
+
+    // Render Option A Multi-line Behavioral Chart
+    const ctx = document.getElementById('behaviorChart').getContext('2d');
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartData.labels,
+        datasets: [
+          {
+            label: 'Completed On-Time',
+            data: chartData.completed,
+            borderColor: '#16a34a',
+            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+            tension: 0.3,
+            fill: true,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Pushed (Procrastination Index)',
+            data: chartData.pushed,
+            borderColor: '#ea580c',
+            backgroundColor: 'rgba(234, 88, 12, 0.1)',
+            tension: 0.3,
+            fill: true,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Execution Rate %',
+            data: chartData.rate,
+            borderColor: '#0284c7',
+            borderDash: [5, 5],
+            tension: 0.3,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { ticks: { color: textColor }, grid: { color: gridColor } },
+          y: { type: 'linear', display: true, position: 'left', ticks: { color: textColor, stepSize: 1 }, grid: { color: gridColor } },
+          y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, ticks: { color: '#0284c7', callback: v => v + '%' }, grid: { drawOnChartArea: false } }
+        },
+        plugins: {
+          legend: { labels: { color: textColor, font: { size: 11, weight: 'bold' } } }
+        }
+      }
+    });
+
+    function toggleAnalyticsPanel() {
+      const b = document.getElementById('analyticsBody');
+      const icon = document.getElementById('chartToggleIcon');
+      b.classList.toggle('collapsed');
+      icon.innerText = b.classList.contains('collapsed') ? '▼ Expand Trends' : '▲ Minimize';
+    }
+
+    // Modal List Direct Print & PDF
+    function printModalTable() {
+      const area = document.getElementById('modalPrintArea').innerHTML;
+      const title = document.getElementById('modalTitle').innerText;
+      const printWindow = window.open('', '', 'width=900,height=650');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              body { font-family: sans-serif; padding: 20px; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 13px; text-align: left; }
+              th { background: #f1f5f9; }
+              .action-btn { display: none; }
+            </style>
+          </head>
+          <body>
+            <h2>${title}</h2>
+            ${area}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }
+
+    async function downloadModalPDF() {
+      const element = document.getElementById('modalPrintArea');
+      const title = document.getElementById('modalTitle').innerText;
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${title.replace(/\s+/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      };
+      await html2pdf().set(opt).from(element).save();
+    }
 
     function toggleSidebar(open) {
       const sidebar = document.getElementById('taskSidebar');
@@ -792,19 +899,13 @@
       }
     });
 
-    // Export Modal Controls
-    function openExportModal() {
-      document.getElementById('exportModal').style.display = 'flex';
-    }
-    function closeExportModal() {
-      document.getElementById('exportModal').style.display = 'none';
-    }
+    function openExportModal() { document.getElementById('exportModal').style.display = 'flex'; }
+    function closeExportModal() { document.getElementById('exportModal').style.display = 'none'; }
     function toggleCustomDateSelect() {
       const val = document.getElementById('exportDuration').value;
       document.getElementById('customWeekBox').style.display = (val === 'custom') ? 'block' : 'none';
     }
 
-    // Apply Active-Hours Filter
     function applyHourFilter(onlyActive) {
       const rows = document.querySelectorAll('#scheduleTable tbody tr');
       rows.forEach(r => {
@@ -817,7 +918,6 @@
       });
     }
 
-    // 1. Download Exact Color PDF via html2pdf.js
     async function executeColorPDF() {
       const durationChoice = document.getElementById('exportDuration').value;
       if (durationChoice === 'custom') {
@@ -832,7 +932,6 @@
       applyHourFilter(hourSpan === 'active');
       closeExportModal();
 
-      // Temporarily hide action buttons on cards for PDF output
       document.querySelectorAll('.card-actions').forEach(el => el.style.display = 'none');
 
       const element = document.getElementById('printableContent');
@@ -846,12 +945,10 @@
 
       await html2pdf().set(opt).from(element).save();
 
-      // Restore elements
       document.querySelectorAll('.card-actions').forEach(el => el.style.display = 'flex');
       applyHourFilter(false);
     }
 
-    // 2. Open Print View
     function executePrint() {
       const durationChoice = document.getElementById('exportDuration').value;
       if (durationChoice === 'custom') {

@@ -43,15 +43,15 @@
       background: var(--card-bg);
       padding: 2.25rem;
       border-radius: 12px;
-      width: 520px;
+      width: 560px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
       border: 1px solid var(--border);
     }
     h2 { margin-top: 0; color: var(--primary); font-size: 1.4rem; }
-    p { font-size: 0.85rem; color: var(--subtext); line-height: 1.4; margin-bottom: 1.5rem; }
+    p { font-size: 0.85rem; color: var(--subtext); line-height: 1.4; margin-bottom: 1.25rem; }
     
     .section-title {
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -62,15 +62,15 @@
       padding-bottom: 0.35rem;
     }
 
-    /* Instant Theme Switch Buttons */
+    /* Instant Theme Switch */
     .theme-toggle-group {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 0.75rem;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1rem;
     }
     .theme-btn {
-      padding: 0.75rem 1rem;
+      padding: 0.65rem 1rem;
       border-radius: 8px;
       border: 2px solid var(--border);
       background: var(--input-bg);
@@ -91,6 +91,31 @@
       color: #ffffff;
     }
 
+    /* Week Start Radio */
+    .radio-row { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-size: 0.85rem; }
+    .radio-row label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+
+    /* Active Days Checkboxes */
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+    .day-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.5rem 0.2rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--input-bg);
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .day-box input { margin-bottom: 0.25rem; }
+
+    /* Priority Schema */
     .priority-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
     .priority-row { display: flex; align-items: center; gap: 0.65rem; }
     
@@ -161,10 +186,10 @@
 </head>
 <body>
   <div class="card">
-    <h2>⚙️ Settings</h2>
-    <p>Choose your theme and customize your priority schema.</p>
+    <h2>⚙️ Settings & Planner Preferences</h2>
+    <p>Configure calendar structure, display theme, and priority urgency tiers.</p>
 
-    <!-- Instant Theme Selector -->
+    <!-- Theme Switch -->
     <div class="section-title">Theme Mode</div>
     <div class="theme-toggle-group">
       <button type="button" class="theme-btn {% if theme != 'dark' %}active{% endif %}" id="btnThemeLight" onclick="setInstantTheme('light')">
@@ -175,9 +200,33 @@
       </button>
     </div>
 
-    <!-- Priority Urgency Schema -->
     <form method="POST">
-      <div class="section-title">Priority Schema</div>
+      <!-- Calendar Structure -->
+      <div class="section-title">Calendar Start Day</div>
+      <div class="radio-row">
+        <label>
+          <input type="radio" name="week_start" value="sunday" {% if week_start == 'sunday' %}checked{% endif %}>
+          Start Week on Sunday
+        </label>
+        <label>
+          <input type="radio" name="week_start" value="monday" {% if week_start == 'monday' %}checked{% endif %}>
+          Start Week on Monday
+        </label>
+      </div>
+
+      <div class="section-title">Active Schedule Days (Visible Columns)</div>
+      <div class="days-grid">
+        <label class="day-box"><input type="checkbox" name="active_days[]" value="0" {% if '0' in active_days %}checked{% endif %}>Sun</label>
+        <label class="day-box"><input type="checkbox" name="active_days[]" value="1" {% if '1' in active_days %}checked{% endif %}>Mon</label>
+        <label class="day-box"><input type="checkbox" name="active_days[]" value="2" {% if '2' in active_days %}checked{% endif %}>Tue</label>
+        <label class="day-box"><input type="checkbox" name="active_days[]" value="3" {% if '3' in active_days %}checked{% endif %}>Wed</label>
+        <label class="day-box"><input type="checkbox" name="active_days[]" value="4" {% if '4' in active_days %}checked{% endif %}>Thu</label>
+        <label class="day-box"><input type="checkbox" name="active_days[]" value="5" {% if '5' in active_days %}checked{% endif %}>Fri</label>
+        <label class="day-box"><input type="checkbox" name="active_days[]" value="6" {% if '6' in active_days %}checked{% endif %}>Sat</label>
+      </div>
+
+      <!-- Priority Schema -->
+      <div class="section-title">Priority Schema & Urgency Levels</div>
       <div class="priority-list" id="priorityList">
         {% for p in priorities %}
         <div class="priority-row">
@@ -189,13 +238,12 @@
       </div>
 
       <button type="button" class="btn-add" onclick="addRow()">+ Add Priority Tier</button>
-      <button type="submit" class="btn-save">Save Priorities & Return to Dashboard</button>
+      <button type="submit" class="btn-save">Save Settings & Update Calendar</button>
     </form>
     <div class="back-link"><a href="/dashboard">← Back to Dashboard</a></div>
   </div>
 
   <script>
-    // Live theme switcher: applies to DOM immediately and persists to DB
     function setInstantTheme(mode) {
       document.documentElement.setAttribute('data-theme', mode);
       localStorage.setItem('planner-theme', mode);
@@ -210,7 +258,6 @@
       });
     }
 
-    // Apply stored preference instantly on load
     const savedTheme = localStorage.getItem('planner-theme');
     if (savedTheme) {
       document.documentElement.setAttribute('data-theme', savedTheme);

@@ -16,8 +16,9 @@ DEFAULT_PRIORITIES = [
     {"id": "p_q4", "label": "Q4: Not Urgent & Not Important", "color": "#10b981"}
 ]
 
-# Full 24-hour coverage (00:00 through 23:00)
 TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
+
+DEFAULT_ACTIVE_DAYS = ["0", "1", "2", "3", "4", "5", "6"]  # 0=Sunday, 6=Saturday
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
@@ -34,6 +35,8 @@ def init_db():
                 password_hash TEXT NOT NULL,
                 priorities_json TEXT,
                 theme TEXT DEFAULT 'light',
+                week_start TEXT DEFAULT 'sunday',
+                active_days TEXT DEFAULT '["0","1","2","3","4","5","6"]',
                 failed_attempts INTEGER DEFAULT 0,
                 lock_until REAL DEFAULT 0,
                 is_permanently_locked INTEGER DEFAULT 0
@@ -44,6 +47,10 @@ def init_db():
         cols = [c[1] for c in cursor.fetchall()]
         if "theme" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'light'")
+        if "week_start" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN week_start TEXT DEFAULT 'sunday'")
+        if "active_days" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN active_days TEXT DEFAULT '[\"0\",\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]'")
         if "failed_attempts" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0")
         if "lock_until" not in cols:
@@ -102,8 +109,8 @@ def register():
             with get_db() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO users (username, email, password_hash, priorities_json, theme, failed_attempts, lock_until, is_permanently_locked) VALUES (?, ?, ?, ?, 'light', 0, 0, 0)",
-                    (username, email, hashed, json.dumps(DEFAULT_PRIORITIES))
+                    "INSERT INTO users (username, email, password_hash, priorities_json, theme, week_start, active_days, failed_attempts, lock_until, is_permanently_locked) VALUES (?, ?, ?, ?, 'light', 'sunday', ?, 0, 0, 0)",
+                    (username, email, hashed, json.dumps(DEFAULT_PRIORITIES), json.dumps(DEFAULT_ACTIVE_DAYS))
                 )
                 conn.commit()
                 session["user_id"] = cursor.lastrowid
@@ -125,16 +132,16 @@ def login():
         with get_db() as conn:
             user = conn.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username.lower())).fetchone()
             if not user:
-                flash("Invalid credentials. If you don't remember your details, use the forgot password option.", "error")
+                flash("Invalid credentials.", "error")
                 return redirect(url_for("login"))
 
             if user["is_permanently_locked"]:
-                flash("Account locked due to excessive failed attempts. Please verify via email to reset your password.", "error")
+                flash("Account locked due to excessive failed attempts.", "error")
                 return redirect(url_for("login"))
 
             if user["lock_until"] and now < user["lock_until"]:
                 mins_left = int((user["lock_until"] - now) // 60) + 1
-                flash(f"Account temporarily locked for security. Please try again in {mins_left} minute(s), or reset your password.", "error")
+                flash(f"Account locked. Try again in {mins_left} min(s).", "error")
                 return redirect(url_for("login"))
 
             if check_password_hash(user["password_hash"], password):
@@ -147,24 +154,16 @@ def login():
                 attempts = user["failed_attempts"] + 1
                 lock_until = 0
                 perm_lock = 0
-                error_msg = "Invalid password. If you don't remember it, please use the forgot password option."
-
                 if attempts >= 9:
                     perm_lock = 1
-                    error_msg = "Account closed due to repeated failed attempts. You must verify via email to restore access."
                 elif attempts >= 8:
-                    lock_until = now + (5 * 60)
-                    error_msg = "Too many failed attempts. Account locked for 5 minutes. Use forgot password if needed."
+                    lock_until = now + 300
                 elif attempts >= 5:
-                    lock_until = now + (2 * 60)
-                    error_msg = "Too many failed attempts. Account locked for 2 minutes. Use forgot password if needed."
+                    lock_until = now + 120
 
-                conn.execute(
-                    "UPDATE users SET failed_attempts = ?, lock_until = ?, is_permanently_locked = ? WHERE id = ?",
-                    (attempts, lock_until, perm_lock, user["id"])
-                )
+                conn.execute("UPDATE users SET failed_attempts = ?, lock_until = ?, is_permanently_locked = ? WHERE id = ?", (attempts, lock_until, perm_lock, user["id"]))
                 conn.commit()
-                flash(error_msg, "error")
+                flash("Invalid password.", "error")
                 return redirect(url_for("login"))
 
     return render_template("login.html")
@@ -178,9 +177,7 @@ def forgot_password():
             if user:
                 conn.execute("UPDATE users SET failed_attempts = 0, lock_until = 0, is_permanently_locked = 0 WHERE id = ?", (user["id"],))
                 conn.commit()
-                flash(f"Verification instructions sent to {email}. Follow the email link to unlock and create a new password.", "info")
-            else:
-                flash("If that email is on file, verification instructions have been sent.", "info")
+        flash("If that email is on file, verification instructions have been sent.", "info")
         return redirect(url_for("login"))
     return render_template("forgot_password.html")
 
@@ -210,7 +207,11 @@ def priority_setup():
     if request.method == "POST":
         labels = request.form.getlist("labels[]")
         colors = request.form.getlist("colors[]")
-        
+        week_start = request.form.get("week_start", "sunday")
+        active_days = request.form.getlist("active_days[]")
+        if not active_days:
+            active_days = DEFAULT_ACTIVE_DAYS
+
         new_priorities = []
         for i, (label, color) in enumerate(zip(labels, colors)):
             clean_label = label.strip()
@@ -225,16 +226,21 @@ def priority_setup():
             new_priorities = DEFAULT_PRIORITIES
 
         with get_db() as conn:
-            conn.execute("UPDATE users SET priorities_json = ? WHERE id = ?", (json.dumps(new_priorities), user_id))
+            conn.execute(
+                "UPDATE users SET priorities_json = ?, week_start = ?, active_days = ? WHERE id = ?",
+                (json.dumps(new_priorities), week_start, json.dumps(active_days), user_id)
+            )
             conn.commit()
         return redirect(url_for("dashboard"))
 
     with get_db() as conn:
-        user = conn.execute("SELECT priorities_json, theme FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = conn.execute("SELECT priorities_json, theme, week_start, active_days FROM users WHERE id = ?", (user_id,)).fetchone()
         priorities = json.loads(user["priorities_json"]) if user and user["priorities_json"] else DEFAULT_PRIORITIES
         theme = user["theme"] if user and user["theme"] else "light"
+        week_start = user["week_start"] if user and user["week_start"] else "sunday"
+        active_days = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
 
-    return render_template("priority_setup.html", priorities=priorities, theme=theme)
+    return render_template("priority_setup.html", priorities=priorities, theme=theme, week_start=week_start, active_days=active_days)
 
 @app.route("/dashboard")
 def dashboard():
@@ -243,37 +249,48 @@ def dashboard():
 
     user_id = session["user_id"]
     week_param = request.args.get("week_start")
-    
-    # Calculate Sunday-start week
+
+    with get_db() as conn:
+        user = conn.execute("SELECT priorities_json, theme, week_start, active_days FROM users WHERE id = ?", (user_id,)).fetchone()
+        priorities = json.loads(user["priorities_json"]) if user and user["priorities_json"] else DEFAULT_PRIORITIES
+        theme = user["theme"] if user and user["theme"] else "light"
+        week_start_pref = user["week_start"] if user and user["week_start"] else "sunday"
+        active_days_list = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
+
+    today = datetime.today().date()
     if week_param:
         try:
             start_date = datetime.strptime(week_param, "%Y-%m-%d").date()
         except ValueError:
-            today = datetime.today().date()
-            # Sunday offset (weekday() has Monday=0, Sunday=6)
+            start_date = today
+    else:
+        if week_start_pref == "monday":
+            start_date = today - timedelta(days=today.weekday())
+        else:
             days_since_sunday = (today.weekday() + 1) % 7
             start_date = today - timedelta(days=days_since_sunday)
-    else:
-        today = datetime.today().date()
-        days_since_sunday = (today.weekday() + 1) % 7
-        start_date = today - timedelta(days=days_since_sunday)
 
-    # Full 7-day week (Sunday to Saturday)
-    week_dates = [start_date + timedelta(days=i) for i in range(7)]
+    # Build 7-day span
+    full_week_dates = [start_date + timedelta(days=i) for i in range(7)]
+    
+    # Filter columns to only active days selected by user (Sun=0, Mon=1, ..., Sat=6)
+    def day_to_code(d):
+        return str((d.weekday() + 1) % 7)
+
+    visible_week_dates = [d for d in full_week_dates if day_to_code(d) in active_days_list]
+    if not visible_week_dates:
+        visible_week_dates = full_week_dates
+
     prev_week = (start_date - timedelta(days=7)).strftime("%Y-%m-%d")
     next_week = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
     cur_week_str = start_date.strftime("%Y-%m-%d")
 
     with get_db() as conn:
-        user = conn.execute("SELECT priorities_json, theme FROM users WHERE id = ?", (user_id,)).fetchone()
-        priorities = json.loads(user["priorities_json"]) if user and user["priorities_json"] else DEFAULT_PRIORITIES
-        theme = user["theme"] if user and user["theme"] else "light"
-        
-        week_date_strs = [d.strftime("%Y-%m-%d") for d in week_dates]
-        placeholders = ",".join("?" for _ in week_date_strs)
+        week_date_strs = [d.strftime("%Y-%m-%d") for d in visible_week_dates]
+        placeholders = ",".join("?" for _ in week_date_strs) if week_date_strs else "''"
         tasks = conn.execute(
             f"SELECT * FROM tasks WHERE user_id = ? AND date IN ({placeholders}) ORDER BY time ASC",
-            [user_id] + week_date_strs
+            [user_id] + week_date_strs if week_date_strs else [user_id]
         ).fetchall()
 
         all_user_tasks = conn.execute("SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,)).fetchall()
@@ -283,6 +300,23 @@ def dashboard():
         undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
         exec_rate = round((done_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0
 
+        # Build 14-day chronological analytics trend for the chart
+        chart_labels = []
+        chart_completed = []
+        chart_pushed = []
+        chart_rate = []
+        for i in range(13, -1, -1):
+            day_cursor = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+            chart_labels.append((today - timedelta(days=i)).strftime("%d %b"))
+            day_tasks = [t for t in all_user_tasks if t["date"] == day_cursor]
+            c_cnt = sum(1 for t in day_tasks if t["status"] == "completed")
+            p_cnt = sum(1 for t in day_tasks if t["status"] == "rescheduled")
+            t_cnt = len(day_tasks)
+            rate = round((c_cnt / t_cnt * 100), 1) if t_cnt > 0 else 0
+            chart_completed.append(c_cnt)
+            chart_pushed.append(p_cnt)
+            chart_rate.append(rate)
+
     return render_template(
         "dashboard.html",
         username=session.get("username"),
@@ -290,7 +324,7 @@ def dashboard():
         priorities=priorities,
         tasks=[dict(t) for t in tasks],
         all_tasks=[dict(t) for t in all_user_tasks],
-        week_dates=week_dates,
+        week_dates=visible_week_dates,
         prev_week=prev_week,
         next_week=next_week,
         cur_week_str=cur_week_str,
@@ -301,6 +335,12 @@ def dashboard():
             "undone": undone_tasks,
             "pushed": pushed_tasks,
             "rate": exec_rate
+        },
+        chart_data={
+            "labels": chart_labels,
+            "completed": chart_completed,
+            "pushed": chart_pushed,
+            "rate": chart_rate
         }
     )
 
