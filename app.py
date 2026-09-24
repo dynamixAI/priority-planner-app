@@ -16,9 +16,8 @@ DEFAULT_PRIORITIES = [
     {"id": "p_q4", "label": "Q4: Not Urgent & Not Important", "color": "#10b981"}
 ]
 
-TIME_SLOTS = [
-    "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"
-]
+# Full 24-hour coverage (00:00 through 23:00)
+TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
@@ -245,15 +244,22 @@ def dashboard():
     user_id = session["user_id"]
     week_param = request.args.get("week_start")
     
+    # Calculate Sunday-start week
     if week_param:
         try:
             start_date = datetime.strptime(week_param, "%Y-%m-%d").date()
         except ValueError:
-            start_date = datetime.today().date() - timedelta(days=datetime.today().weekday())
+            today = datetime.today().date()
+            # Sunday offset (weekday() has Monday=0, Sunday=6)
+            days_since_sunday = (today.weekday() + 1) % 7
+            start_date = today - timedelta(days=days_since_sunday)
     else:
-        start_date = datetime.today().date() - timedelta(days=datetime.today().weekday())
+        today = datetime.today().date()
+        days_since_sunday = (today.weekday() + 1) % 7
+        start_date = today - timedelta(days=days_since_sunday)
 
-    week_dates = [start_date + timedelta(days=i) for i in range(5)]
+    # Full 7-day week (Sunday to Saturday)
+    week_dates = [start_date + timedelta(days=i) for i in range(7)]
     prev_week = (start_date - timedelta(days=7)).strftime("%Y-%m-%d")
     next_week = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
     cur_week_str = start_date.strftime("%Y-%m-%d")
@@ -270,7 +276,7 @@ def dashboard():
             [user_id] + week_date_strs
         ).fetchall()
 
-        all_user_tasks = conn.execute("SELECT status FROM tasks WHERE user_id = ?", (user_id,)).fetchall()
+        all_user_tasks = conn.execute("SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,)).fetchall()
         total_tasks = len(all_user_tasks)
         done_tasks = sum(1 for t in all_user_tasks if t["status"] == "completed")
         pushed_tasks = sum(1 for t in all_user_tasks if t["status"] == "rescheduled")
@@ -283,6 +289,7 @@ def dashboard():
         theme=theme,
         priorities=priorities,
         tasks=[dict(t) for t in tasks],
+        all_tasks=[dict(t) for t in all_user_tasks],
         week_dates=week_dates,
         prev_week=prev_week,
         next_week=next_week,

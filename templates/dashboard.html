@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>Weekly Priority Planner & Execution Dashboard</title>
   <script>
-    // Read local theme immediately before render to avoid flash of wrong mode
     const cachedTheme = localStorage.getItem('planner-theme');
     if (cachedTheme) {
       document.documentElement.setAttribute('data-theme', cachedTheme);
@@ -48,7 +47,7 @@
       overflow: hidden;
     }
 
-    /* Left Sidebar */
+    /* Collapsible Left Sidebar */
     .sidebar {
       width: 320px;
       min-width: 320px;
@@ -58,7 +57,14 @@
       display: flex;
       flex-direction: column;
       overflow-y: auto;
+      transition: margin-left 0.25s ease, opacity 0.25s ease;
     }
+    .sidebar.collapsed {
+      margin-left: -320px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
     .brand { font-size: 1.2rem; font-weight: bold; color: var(--primary); margin-bottom: 0.25rem; }
     .user-tag { font-size: 0.75rem; color: var(--metric-muted); margin-bottom: 1.25rem; display: flex; justify-content: space-between; }
     .user-tag a { color: #ef4444; text-decoration: none; font-weight: 600; }
@@ -76,14 +82,18 @@
       background: var(--card-bg);
       color: var(--text);
     }
-    input[type="date"]::-webkit-calendar-picker-indicator {
+
+    /* Fixed Dark Mode Calendar & Time/Clock Icons */
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
       display: block !important;
-      opacity: 0.8;
+      opacity: 0.85;
       filter: invert(0.2);
     }
-    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
-      filter: invert(0.9);
+    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+    [data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.95);
     }
 
     .btn-create {
@@ -100,13 +110,14 @@
     }
     .btn-create:hover { background: var(--primary-hover); }
 
-    /* Main Area */
+    /* Main Content Area */
     .main-content {
       flex: 1;
       padding: 1.25rem;
       display: flex;
       flex-direction: column;
       overflow-y: auto;
+      transition: width 0.25s ease;
     }
 
     .top-nav {
@@ -114,7 +125,30 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
+      gap: 0.75rem;
     }
+    .left-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    /* Hamburger Toggle Button */
+    .btn-toggle-sidebar {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0.45rem 0.65rem;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .btn-toggle-sidebar:hover { background: var(--slot-hover); }
+
     .week-nav { display: flex; align-items: center; gap: 0.5rem; }
     .nav-btn {
       background: var(--card-bg);
@@ -176,14 +210,13 @@
       overflow-x: auto;
       flex: 1;
     }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 900px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1050px; }
     th, td { border: 1px solid var(--border); text-align: center; vertical-align: top; padding: 0.35rem; }
     th { background: var(--table-header); font-size: 0.75rem; font-weight: bold; color: var(--text); }
-    .time-col { width: 85px; font-weight: bold; background: var(--table-header); font-size: 0.75rem; color: var(--metric-muted); }
+    .time-col { width: 75px; font-weight: bold; background: var(--table-header); font-size: 0.75rem; color: var(--metric-muted); }
 
-    .slot-cell { height: 80px; text-align: left; }
+    .slot-cell { height: 75px; text-align: left; }
     
-    /* Interactive Task Cards */
     .task-card {
       border-radius: 6px;
       padding: 0.4rem;
@@ -251,11 +284,7 @@
     }
     .modal-table th { background: var(--table-header); }
 
-    /* Detail View Item Box */
-    .detail-row {
-      margin-bottom: 0.75rem;
-      font-size: 0.85rem;
-    }
+    .detail-row { margin-bottom: 0.75rem; font-size: 0.85rem; }
     .detail-row b {
       display: block;
       color: var(--metric-muted);
@@ -267,8 +296,8 @@
 </head>
 <body>
 
-  <!-- Left Sidebar -->
-  <aside class="sidebar">
+  <!-- Collapsible Left Sidebar -->
+  <aside class="sidebar" id="taskSidebar">
     <div class="brand">Priority Planner</div>
     <div class="user-tag">
       <span>Logged in: <b>{{ username }}</b></span>
@@ -284,7 +313,7 @@
 
     <div class="form-group">
       <label>2. Start Time</label>
-      <input type="time" id="inputTime" value="09:00">
+      <input type="time" id="inputTime" value="09:00" onclick="this.showPicker()">
     </div>
 
     <div class="form-group">
@@ -328,10 +357,16 @@
   <!-- Main Content Area -->
   <main class="main-content">
     <div class="top-nav">
-      <div class="week-nav">
-        <a href="/dashboard?week_start={{ prev_week }}" class="nav-btn">← Prev Week</a>
-        <a href="/dashboard" class="nav-btn">Current Week</a>
-        <a href="/dashboard?week_start={{ next_week }}" class="nav-btn">Next Week →</a>
+      <div class="left-controls">
+        <!-- Hamburger Icon Button to Open/Close Sidebar -->
+        <button class="btn-toggle-sidebar" onclick="toggleSidebar()" title="Toggle Task Sidebar">
+          ☰
+        </button>
+        <div class="week-nav">
+          <a href="/dashboard?week_start={{ prev_week }}" class="nav-btn">← Prev Week</a>
+          <a href="/dashboard" class="nav-btn">Current Week</a>
+          <a href="/dashboard?week_start={{ next_week }}" class="nav-btn">Next Week →</a>
+        </div>
       </div>
       <div class="week-title">Week of {{ week_dates[0].strftime("%B %d, %Y") }}</div>
       <div>
@@ -375,7 +410,7 @@
       {% endfor %}
     </div>
 
-    <!-- Timetable Grid -->
+    <!-- 7-Day & 24-Hour Timetable Grid -->
     <div class="grid-container">
       <table>
         <thead>
@@ -403,7 +438,6 @@
                         {% set ns.found_color = p.color %}
                       {% endif %}
                     {% endfor %}
-                    <!-- Clicking the card body opens full details -->
                     <div class="task-card {{ 'completed' if task.status == 'completed' else '' }} {{ 'rescheduled' if task.status == 'rescheduled' else '' }}" 
                          style="background-color: {{ ns.found_color }};" 
                          onclick="showTaskDetail({{ task.id }})">
@@ -471,11 +505,23 @@
   </div>
 
   <script>
-    const allTasks = {{ tasks|tojson }};
+    const allUserTasks = {{ all_tasks|tojson }};
+    const currentWeekTasks = {{ tasks|tojson }};
     const allPriorities = {{ priorities|tojson }};
 
+    function toggleSidebar() {
+      const sidebar = document.getElementById('taskSidebar');
+      sidebar.classList.toggle('collapsed');
+      localStorage.setItem('planner-sidebar-collapsed', sidebar.classList.contains('collapsed'));
+    }
+
+    // Restore sidebar state
+    if (localStorage.getItem('planner-sidebar-collapsed') === 'true') {
+      document.getElementById('taskSidebar').classList.add('collapsed');
+    }
+
     function showTaskDetail(taskId) {
-      const task = allTasks.find(t => t.id === taskId);
+      const task = allUserTasks.find(t => t.id === taskId);
       if (!task) return;
 
       const prio = allPriorities.find(p => p.id === task.priority_id) || { label: 'General', color: '#0284c7' };
@@ -521,16 +567,16 @@
       const tbody = document.getElementById('modalTableBody');
       tbody.innerHTML = '';
 
-      let filtered = allTasks;
+      let filtered = allUserTasks;
       if (filter === 'completed') {
         title.innerText = 'Completed Tasks';
-        filtered = allTasks.filter(t => t.status === 'completed');
+        filtered = allUserTasks.filter(t => t.status === 'completed');
       } else if (filter === 'pending') {
         title.innerText = 'Undone (Pending) Tasks';
-        filtered = allTasks.filter(t => t.status === 'pending');
+        filtered = allUserTasks.filter(t => t.status === 'pending');
       } else if (filter === 'rescheduled') {
         title.innerText = 'Pushed (Rescheduled) Tasks';
-        filtered = allTasks.filter(t => t.status === 'rescheduled');
+        filtered = allUserTasks.filter(t => t.status === 'rescheduled');
       } else {
         title.innerText = 'All Scheduled Tasks';
       }
