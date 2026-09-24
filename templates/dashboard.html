@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Weekly Priority Planner & Execution Dashboard</title>
+  <!-- html2pdf.js for generating full-color client-side PDFs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script>
     const cachedTheme = localStorage.getItem('planner-theme');
     if (cachedTheme) {
@@ -69,7 +71,6 @@
       pointer-events: none;
     }
 
-    /* Sidebar Drawer Header */
     .sidebar-header {
       display: flex;
       justify-content: space-between;
@@ -123,7 +124,6 @@
       color: var(--text);
     }
 
-    /* Inverted Calendar and Clock Pickers for Dark Mode */
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="time"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
@@ -161,7 +161,7 @@
       transition: all 0.25s ease;
     }
 
-    /* Header Navigation */
+    /* Top Nav */
     .top-nav {
       display: flex;
       justify-content: space-between;
@@ -211,7 +211,7 @@
     .nav-btn:hover { background: var(--slot-hover); }
     .week-title { font-size: 1rem; font-weight: 700; color: var(--text); }
 
-    /* Right Header: Profile Hub & Dropdown */
+    /* Right Header: Profile Hub */
     .right-controls {
       display: flex;
       align-items: center;
@@ -255,7 +255,7 @@
       border: 2px solid var(--border);
     }
 
-    /* Sleek User Profile Dropdown Menu */
+    /* Profile Dropdown */
     .profile-dropdown {
       display: none;
       position: absolute;
@@ -359,6 +359,8 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.25);
       cursor: pointer;
       transition: transform 0.1s ease;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     .task-card:hover { transform: scale(1.02); }
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
@@ -378,7 +380,7 @@
     }
     .action-btn:hover { background: rgba(15, 23, 42, 0.95); }
 
-    /* Modals */
+    /* Modals Generic */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -425,6 +427,34 @@
       text-transform: uppercase;
       margin-bottom: 0.2rem;
     }
+
+    /* Print Stylesheet: Preserves exact colors and layout */
+    @media print {
+      @page { size: landscape; margin: 10mm; }
+      body {
+        height: auto !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+      }
+      .sidebar, .top-nav, .card-actions, .modal-overlay, .profile-dropdown {
+        display: none !important;
+      }
+      .main-content {
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      .grid-container {
+        border: 1px solid #94a3b8 !important;
+        overflow: visible !important;
+      }
+      th, td { border: 1px solid #cbd5e1 !important; }
+      .task-card {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        box-shadow: none !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -433,7 +463,6 @@
   <aside class="sidebar" id="taskSidebar">
     <div class="sidebar-header">
       <div class="panel-title">Add New Task</div>
-      <!-- Internal X button that closes drawer and brings back hamburger -->
       <button class="btn-close-drawer" onclick="toggleSidebar(false)" title="Close Drawer">✕</button>
     </div>
 
@@ -486,10 +515,9 @@
   </aside>
 
   <!-- Main Content Area -->
-  <main class="main-content">
+  <main class="main-content" id="printableContent">
     <div class="top-nav">
       <div class="left-controls">
-        <!-- Hamburger Button (Appears only when panel is closed) -->
         <button class="btn-hamburger" id="btnHamburger" onclick="toggleSidebar(true)" title="Open Task Drawer">
           ☰
         </button>
@@ -500,11 +528,13 @@
         </div>
       </div>
 
-      <div class="week-title">Week of {{ week_dates[0].strftime("%B %d, %Y") }}</div>
+      <div class="week-title" id="exportWeekTitle">Week of {{ week_dates[0].strftime("%B %d, %Y") }}</div>
 
       <!-- Right Header Profile & Action Hub -->
       <div class="right-controls">
-        <button class="nav-btn" onclick="window.print()">Export / Print</button>
+        <button class="nav-btn" onclick="openExportModal()">
+          <span>🖨️ Export / Print</span>
+        </button>
         
         <div class="profile-hub" id="profileHub" onclick="toggleProfileDropdown(event)">
           <div style="text-align: right;">
@@ -513,7 +543,6 @@
           </div>
           <div class="avatar-badge">{{ username[:1].upper() }}</div>
 
-          <!-- Sleek Profile Dropdown -->
           <div class="profile-dropdown" id="profileDropdown">
             <button type="button" class="dropdown-item" onclick="toggleThemeQuick()">
               <span id="themeDropText">🌙 Switch to Dark</span>
@@ -567,8 +596,8 @@
     </div>
 
     <!-- 7-Day & 24-Hour Timetable Grid -->
-    <div class="grid-container">
-      <table>
+    <div class="grid-container" id="gridContainer">
+      <table id="scheduleTable">
         <thead>
           <tr>
             <th class="time-col">Time</th>
@@ -580,7 +609,7 @@
         <tbody>
           {% for slot in time_slots %}
           {% set slot_hour = slot.split(':')[0] %}
-          <tr>
+          <tr data-slot="{{ slot }}">
             <td class="time-col">{{ slot }}</td>
             {% for d in week_dates %}
               {% set cell_date = d.strftime("%Y-%m-%d") %}
@@ -624,7 +653,47 @@
     </div>
   </main>
 
-  <!-- Modal 1: Task Inspection / Details Modal -->
+  <!-- Modal 1: Export & Print Configuration Modal -->
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal-content" style="width: 480px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 1.15rem; color: var(--primary);">🖨️ Export & Print Options</h3>
+        <button class="nav-btn" onclick="closeExportModal()">✕</button>
+      </div>
+
+      <div class="form-group">
+        <label>1. Select Duration to Export</label>
+        <select id="exportDuration" onchange="toggleCustomDateSelect()">
+          <option value="current">Current Viewed Week ({{ week_dates[0].strftime('%b %d') }} - {{ week_dates[6].strftime('%b %d') }})</option>
+          <option value="custom">Specific Week...</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="customWeekBox" style="display: none;">
+        <label>Pick Specific Week Start (Sunday)</label>
+        <input type="date" id="exportCustomDate" value="{{ cur_week_str }}" onclick="this.showPicker()">
+      </div>
+
+      <div class="form-group">
+        <label>2. Hour Span</label>
+        <select id="exportHourSpan">
+          <option value="active" selected>Active Hours with Tasks Only (Eliminates empty rows)</option>
+          <option value="all">Full 24 Hours (00:00 - 23:00)</option>
+        </select>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
+        <button class="btn-create" style="flex: 1; background: #16a34a;" onclick="executeColorPDF()">
+          📥 Download Color PDF
+        </button>
+        <button class="btn-create" style="flex: 1;" onclick="executePrint()">
+          🖨️ Open Print View
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Task Inspection Modal -->
   <div class="modal-overlay" id="detailModal">
     <div class="modal-content" style="width: 450px;">
       <div class="modal-header">
@@ -635,7 +704,7 @@
     </div>
   </div>
 
-  <!-- Modal 2: Metric Card Filtered Tasks Table -->
+  <!-- Modal 3: Metric Card Filtered Tasks Table -->
   <div class="modal-overlay" id="listModal">
     <div class="modal-content" style="width: 750px;">
       <div class="modal-header">
@@ -665,7 +734,6 @@
     const currentWeekTasks = {{ tasks|tojson }};
     const allPriorities = {{ priorities|tojson }};
 
-    // Sidebar drawer toggle logic
     function toggleSidebar(open) {
       const sidebar = document.getElementById('taskSidebar');
       const burger = document.getElementById('btnHamburger');
@@ -681,7 +749,6 @@
       }
     }
 
-    // Initialize sidebar state on page load
     const isCollapsed = localStorage.getItem('planner-sidebar-collapsed') === 'true';
     if (isCollapsed) {
       document.getElementById('taskSidebar').classList.add('collapsed');
@@ -691,7 +758,6 @@
       document.getElementById('btnHamburger').classList.add('hidden');
     }
 
-    // Profile Dropdown Toggle
     function toggleProfileDropdown(e) {
       e.stopPropagation();
       const drop = document.getElementById('profileDropdown');
@@ -719,13 +785,92 @@
       });
     }
 
-    // Close dropdown when clicking outside
     document.addEventListener('click', function(e) {
       const drop = document.getElementById('profileDropdown');
       if (drop && !drop.contains(e.target)) {
         drop.classList.remove('open');
       }
     });
+
+    // Export Modal Controls
+    function openExportModal() {
+      document.getElementById('exportModal').style.display = 'flex';
+    }
+    function closeExportModal() {
+      document.getElementById('exportModal').style.display = 'none';
+    }
+    function toggleCustomDateSelect() {
+      const val = document.getElementById('exportDuration').value;
+      document.getElementById('customWeekBox').style.display = (val === 'custom') ? 'block' : 'none';
+    }
+
+    // Apply Active-Hours Filter
+    function applyHourFilter(onlyActive) {
+      const rows = document.querySelectorAll('#scheduleTable tbody tr');
+      rows.forEach(r => {
+        if (!onlyActive) {
+          r.style.display = '';
+        } else {
+          const hasTask = r.querySelector('.task-card') !== null;
+          r.style.display = hasTask ? '' : 'none';
+        }
+      });
+    }
+
+    // 1. Download Exact Color PDF via html2pdf.js
+    async function executeColorPDF() {
+      const durationChoice = document.getElementById('exportDuration').value;
+      if (durationChoice === 'custom') {
+        const customDate = document.getElementById('exportCustomDate').value;
+        if (customDate) {
+          window.location.href = `/dashboard?week_start=${customDate}`;
+          return;
+        }
+      }
+
+      const hourSpan = document.getElementById('exportHourSpan').value;
+      applyHourFilter(hourSpan === 'active');
+      closeExportModal();
+
+      // Temporarily hide action buttons on cards for PDF output
+      document.querySelectorAll('.card-actions').forEach(el => el.style.display = 'none');
+
+      const element = document.getElementById('printableContent');
+      const opt = {
+        margin: [8, 8, 8, 8],
+        filename: `Priority_Planner_${document.getElementById('exportWeekTitle').innerText.replace(/\s+/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+
+      // Restore elements
+      document.querySelectorAll('.card-actions').forEach(el => el.style.display = 'flex');
+      applyHourFilter(false);
+    }
+
+    // 2. Open Print View
+    function executePrint() {
+      const durationChoice = document.getElementById('exportDuration').value;
+      if (durationChoice === 'custom') {
+        const customDate = document.getElementById('exportCustomDate').value;
+        if (customDate) {
+          window.location.href = `/dashboard?week_start=${customDate}`;
+          return;
+        }
+      }
+
+      const hourSpan = document.getElementById('exportHourSpan').value;
+      applyHourFilter(hourSpan === 'active');
+      closeExportModal();
+
+      setTimeout(() => {
+        window.print();
+        applyHourFilter(false);
+      }, 300);
+    }
 
     function showTaskDetail(taskId) {
       const task = allUserTasks.find(t => t.id === taskId);
