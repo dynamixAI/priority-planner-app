@@ -337,7 +337,7 @@
     .metric-label { font-size: 0.68rem; text-transform: uppercase; color: var(--metric-muted); font-weight: bold; }
     .metric-num { font-size: 1.35rem; font-weight: bold; margin-top: 0.2rem; }
 
-    /* Option A: Expandable Behavioral Analytics Card */
+    /* Expandable Analytics Panel */
     .analytics-panel {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -407,7 +407,6 @@
     .task-card:hover { transform: scale(1.02); }
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
     .task-card.rescheduled { outline: 2px dashed #ea580c; }
-    /* Missed task visual distinction */
     .task-card.missed {
       border: 2px solid #ef4444;
       opacity: 0.85;
@@ -428,12 +427,13 @@
     }
     .action-btn:hover { background: rgba(15, 23, 42, 0.95); }
 
-    /* Modals */
+    /* Modern Redesigned Task List Modal */
     .modal-overlay {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.65);
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(4px);
       align-items: center;
       justify-content: center;
       z-index: 999;
@@ -441,31 +441,102 @@
     .modal-content {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      width: 600px;
-      max-width: 90%;
-      max-height: 80vh;
+      border-radius: 12px;
+      width: 860px;
+      max-width: 95%;
+      max-height: 85vh;
       display: flex;
       flex-direction: column;
-      padding: 1.25rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      padding: 1.5rem;
+      box-shadow: 0 20px 35px -5px rgba(0,0,0,0.3);
     }
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
+      margin-bottom: 1.25rem;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 0.5rem;
+      padding-bottom: 0.75rem;
     }
-    .modal-table { width: 100%; border-collapse: collapse; }
-    .modal-table th, .modal-table td {
-      border: 1px solid var(--border);
-      padding: 0.5rem;
+
+    /* Fixed-Width Compact Table to Eliminate Horizontal Scrolling */
+    .modal-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+    }
+    .modal-table th {
+      background: var(--table-header);
+      padding: 0.65rem 0.6rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      color: var(--metric-muted);
+      border-bottom: 2px solid var(--border);
       text-align: left;
-      font-size: 0.8rem;
     }
-    .modal-table th { background: var(--table-header); }
+    .modal-table td {
+      padding: 0.7rem 0.6rem;
+      font-size: 0.8rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    .modal-table tbody tr:hover {
+      background: var(--slot-hover);
+    }
+
+    /* Specific Width Allocations */
+    .col-time { width: 15%; }
+    .col-task { width: 37%; }
+    .col-priority { width: 23%; }
+    .col-status { width: 11%; }
+    .col-action { width: 14%; text-align: right; }
+
+    /* Modern Table Elements */
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.45rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+    .status-pending { background: rgba(2, 132, 199, 0.15); color: #0284c7; }
+    .status-completed { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
+    .status-rescheduled { background: rgba(234, 88, 12, 0.15); color: #ea580c; }
+    .status-missed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+    .tbl-action-btn {
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tbl-action-btn.reschedule {
+      background: #ea580c;
+      color: #ffffff;
+    }
+    .tbl-action-btn.reschedule:hover { background: #c2410c; }
+    
+    .tbl-action-btn.done {
+      background: #16a34a;
+      color: #ffffff;
+    }
+    .tbl-action-btn.done:hover { background: #15803d; }
+    
+    .tbl-action-btn.undo {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
 
     .detail-row { margin-bottom: 0.75rem; font-size: 0.85rem; }
     .detail-row b {
@@ -620,7 +691,6 @@
         <div class="metric-label" style="color: #ef4444;">Missed</div>
         <div class="metric-num" style="color: #ef4444;">{{ metrics.missed }}</div>
       </div>
-      <!-- Clickable Behavioral Health Index Card -->
       <div class="metric-card" style="border-left: 4px solid {{ metrics.bhi_color }};" onclick="toggleAnalyticsPanel()">
         <div class="metric-label" style="color: {{ metrics.bhi_color }};">Behavior Index 📈</div>
         <div class="metric-num" style="color: {{ metrics.bhi_color }}; font-size: 1.15rem;">
@@ -629,7 +699,7 @@
       </div>
     </div>
 
-    <!-- Option A: Expandable Behavioral Analytics Card (Hidden Until Clicked) -->
+    <!-- Option A: Expandable Behavioral Analytics Card -->
     <div class="analytics-panel" id="analyticsPanel">
       <div class="analytics-header">
         <span>📈 Behavioral Trends (14-Day Accountability & Procrastination Matrix)</span>
@@ -691,7 +761,6 @@
                       <div class="card-location">📍 {{ task.location }}</div>
                       {% endif %}
                       <div class="card-actions" onclick="event.stopPropagation()">
-                        <!-- Option A Strict Accountability: If missed, Done is completely removed -->
                         {% if task.status != 'missed' %}
                         <button class="action-btn" onclick="toggleComplete({{ task.id }}, '{{ task.status }}')">
                           {{ 'Undo' if task.status == 'completed' else 'Done' }}
@@ -714,7 +783,7 @@
     </div>
   </main>
 
-  <!-- Modal 1: Export & Print Configuration Modal -->
+  <!-- Modal 1: Export Options -->
   <div class="modal-overlay" id="exportModal">
     <div class="modal-content" style="width: 480px;">
       <div class="modal-header">
@@ -765,12 +834,12 @@
     </div>
   </div>
 
-  <!-- Modal 3: Metric Card Tasks Table -->
+  <!-- Modal 3: Redesigned Modern Task List Modal (Zero Horizontal Scrolling) -->
   <div class="modal-overlay" id="listModal">
-    <div class="modal-content" style="width: 780px;">
+    <div class="modal-content">
       <div class="modal-header">
-        <h3 id="modalTitle" style="margin: 0; font-size: 1.1rem; color: var(--primary);">Tasks</h3>
-        <div style="display: flex; gap: 0.4rem; align-items: center;">
+        <h3 id="modalTitle" style="margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--primary);">Tasks</h3>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
           <button class="nav-btn" onclick="printModalTable()">🖨️ Print List</button>
           <button class="nav-btn" style="color: #16a34a;" onclick="downloadModalPDF()">📥 Download PDF</button>
           <button class="nav-btn" onclick="closeTaskModal()">Close (✕)</button>
@@ -780,12 +849,11 @@
         <table class="modal-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Task</th>
-              <th>Priority</th>
-              <th>Status</th>
-              <th>Action</th>
+              <th class="col-time">Scheduled</th>
+              <th class="col-task">Task & Details</th>
+              <th class="col-priority">Priority</th>
+              <th class="col-status">Status</th>
+              <th class="col-action">Action</th>
             </tr>
           </thead>
           <tbody id="modalTableBody"></tbody>
@@ -929,7 +997,7 @@
               table { width: 100%; border-collapse: collapse; }
               th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 13px; text-align: left; }
               th { background: #f1f5f9; }
-              .action-btn { display: none; }
+              .tbl-action-btn { display: none; }
             </style>
           </head>
           <body>
@@ -1143,14 +1211,14 @@
         title.innerText = 'Pushed (Rescheduled) Tasks';
         filtered = allUserTasks.filter(t => t.status === 'rescheduled');
       } else if (filter === 'missed') {
-        title.innerText = 'Missed Tasks (Locked History)';
+        title.innerText = 'Missed Tasks';
         filtered = allUserTasks.filter(t => t.status === 'missed');
       } else {
         title.innerText = 'All Scheduled Tasks';
       }
 
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--metric-muted); padding: 1rem;">No tasks found in this view.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--metric-muted); padding: 2rem;">No tasks found in this view.</td></tr>';
       } else {
         filtered.forEach(t => {
           const prio = allPriorities.find(p => p.id === t.priority_id) || { label: 'Standard', color: '#0284c7' };
@@ -1158,18 +1226,35 @@
           
           let actionHtml = '';
           if (t.status === 'missed') {
-            actionHtml = `<button class="action-btn" style="color: #fb923c;" onclick="rescheduleTask(${t.id})">Reschedule</button>`;
+            actionHtml = `<button class="tbl-action-btn reschedule" onclick="rescheduleTask(${t.id})">Reschedule</button>`;
+          } else if (t.status === 'completed') {
+            actionHtml = `<button class="tbl-action-btn undo" onclick="toggleComplete(${t.id}, '${t.status}')">Undo</button>`;
           } else {
-            actionHtml = `<button class="action-btn" onclick="toggleComplete(${t.id}, '${t.status}')">${t.status === 'completed' ? 'Undo' : 'Done'}</button>`;
+            actionHtml = `<button class="tbl-action-btn done" onclick="toggleComplete(${t.id}, '${t.status}')">Done</button>`;
           }
 
           row.innerHTML = `
-            <td>${t.date}</td>
-            <td>${t.time}</td>
-            <td><b>${t.title}</b> ${t.detail ? '<br><small style="color: var(--metric-muted);">' + t.detail + '</small>' : ''} ${t.location ? '<br><small>📍 ' + t.location + '</small>' : ''}</td>
-            <td><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${prio.color}; margin-right: 6px;"></span>${prio.label}</td>
-            <td><span style="text-transform: capitalize;">${t.status}</span></td>
-            <td>${actionHtml}</td>
+            <td class="col-time">
+              <b>${t.date}</b><br>
+              <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${t.time}</span>
+            </td>
+            <td class="col-task">
+              <b style="color: var(--text);">${t.title}</b>
+              ${t.detail ? '<br><span style="font-size: 0.72rem; color: var(--metric-muted);">' + t.detail + '</span>' : ''}
+              ${t.location ? '<br><span style="font-size: 0.7rem; color: var(--primary);">📍 ' + t.location + '</span>' : ''}
+            </td>
+            <td class="col-priority">
+              <span style="display: inline-flex; align-items: center; gap: 5px;">
+                <span style="width: 8px; height: 8px; border-radius: 2px; background: ${prio.color};"></span>
+                <span>${prio.label}</span>
+              </span>
+            </td>
+            <td class="col-status">
+              <span class="status-pill status-${t.status}">${t.status}</span>
+            </td>
+            <td class="col-action">
+              ${actionHtml}
+            </td>
           `;
           tbody.appendChild(row);
         });
