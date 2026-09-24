@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Weekly Priority Planner & Execution Dashboard</title>
-  <!-- Chart.js for Anti-Procrastination Visual Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- html2pdf.js for Generating Color PDFs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script>
     const cachedTheme = localStorage.getItem('planner-theme');
@@ -275,11 +273,54 @@
     .dropdown-divider { height: 1px; background: var(--border); margin: 0.25rem 0; }
     .dropdown-item.danger { color: #ef4444; }
 
+    /* Reconciliation Check-in Banner */
+    .reconciliation-banner {
+      background: rgba(234, 179, 8, 0.12);
+      border: 1px solid rgba(234, 179, 8, 0.4);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .banner-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #b45309;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    [data-theme="dark"] .banner-title { color: #fde047; }
+    .reconcile-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+    .reconcile-actions { display: flex; gap: 0.35rem; }
+    .btn-rec {
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--card-bg);
+      color: var(--text);
+    }
+    .btn-rec:hover { background: var(--slot-hover); }
+
     /* Anti-Procrastination Metrics Bar */
     .metrics-bar {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 0.75rem;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.65rem;
       margin-bottom: 0.85rem;
     }
     .metric-card {
@@ -305,13 +346,14 @@
       border-radius: 8px;
       margin-bottom: 1rem;
       overflow: hidden;
+      display: none;
     }
+    .analytics-panel.visible { display: block; }
     .analytics-header {
       padding: 0.6rem 0.85rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      cursor: pointer;
       background: var(--table-header);
       font-size: 0.8rem;
       font-weight: bold;
@@ -319,10 +361,8 @@
     }
     .analytics-body {
       padding: 1rem;
-      display: block;
       height: 240px;
     }
-    .analytics-body.collapsed { display: none; }
 
     /* Priority Legend */
     .legend-bar {
@@ -369,6 +409,7 @@
     .task-card:hover { transform: scale(1.02); }
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
     .task-card.rescheduled { outline: 2px dashed #ea580c; }
+    .task-card.missed { border: 2px solid #ef4444; }
     .card-title { font-weight: bold; font-size: 0.75rem; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
     .card-detail { font-size: 0.68rem; margin-top: 2px; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }
     .card-location { font-size: 0.65rem; margin-top: 2px; font-style: italic; opacity: 0.95; }
@@ -435,7 +476,7 @@
     @media print {
       @page { size: landscape; margin: 10mm; }
       body { height: auto !important; overflow: visible !important; background: #ffffff !important; color: #000000 !important; }
-      .sidebar, .top-nav, .card-actions, .modal-overlay, .profile-dropdown, .analytics-panel { display: none !important; }
+      .sidebar, .top-nav, .card-actions, .modal-overlay, .profile-dropdown, .analytics-panel, .reconciliation-banner { display: none !important; }
       .main-content { padding: 0 !important; overflow: visible !important; }
       .grid-container { border: 1px solid #94a3b8 !important; overflow: visible !important; }
       th, td { border: 1px solid #cbd5e1 !important; }
@@ -545,37 +586,53 @@
       </div>
     </div>
 
-    <!-- Anti-Procrastination Metrics Bar -->
+    <!-- Morning/Next-Login Reconciliation Check-in Banner -->
+    <div class="reconciliation-banner" id="reconcileBanner" style="display: none;">
+      <div class="banner-title">
+        <span>⏰ Unconfirmed Past Tasks — Quick Catch-up</span>
+        <span style="font-size: 0.72rem; font-weight: normal; color: var(--text);">Clear these to keep your behavioral score accurate</span>
+      </div>
+      <div id="reconcileList"></div>
+    </div>
+
+    <!-- Anti-Procrastination Metrics Bar (Includes Behavior Index) -->
     <div class="metrics-bar">
       <div class="metric-card" onclick="openTaskModal('all')">
         <div class="metric-label">Total Planned</div>
         <div class="metric-num">{{ metrics.total }}</div>
       </div>
       <div class="metric-card" onclick="openTaskModal('completed')">
-        <div class="metric-label" style="color: #16a34a;">Done (Completed)</div>
+        <div class="metric-label" style="color: #16a34a;">Done</div>
         <div class="metric-num" style="color: #16a34a;">{{ metrics.done }}</div>
       </div>
       <div class="metric-card" onclick="openTaskModal('pending')">
-        <div class="metric-label" style="color: #0284c7;">Undone (Pending)</div>
+        <div class="metric-label" style="color: #0284c7;">Undone</div>
         <div class="metric-num" style="color: #0284c7;">{{ metrics.undone }}</div>
       </div>
       <div class="metric-card" onclick="openTaskModal('rescheduled')">
-        <div class="metric-label" style="color: #ea580c;">Pushed (Rescheduled)</div>
+        <div class="metric-label" style="color: #ea580c;">Pushed</div>
         <div class="metric-num" style="color: #ea580c;">{{ metrics.pushed }}</div>
       </div>
-      <div class="metric-card" onclick="openTaskModal('all')">
-        <div class="metric-label" style="color: #0284c7;">Execution Rate</div>
-        <div class="metric-num" style="color: #0284c7;">{{ metrics.rate }}%</div>
+      <div class="metric-card" onclick="openTaskModal('missed')">
+        <div class="metric-label" style="color: #ef4444;">Missed</div>
+        <div class="metric-num" style="color: #ef4444;">{{ metrics.missed }}</div>
+      </div>
+      <!-- Clickable Behavioral Health Index Card -->
+      <div class="metric-card" style="border-left: 4px solid {{ metrics.bhi_color }};" onclick="toggleAnalyticsPanel()">
+        <div class="metric-label" style="color: {{ metrics.bhi_color }};">Behavior Index 📈</div>
+        <div class="metric-num" style="color: {{ metrics.bhi_color }}; font-size: 1.15rem;">
+          {{ metrics.bhi_score }} <span style="font-size: 0.75rem; font-weight: normal;">({{ metrics.bhi_tier }})</span>
+        </div>
       </div>
     </div>
 
-    <!-- Option A: Behavioral & Execution Trends Chart Panel -->
-    <div class="analytics-panel">
-      <div class="analytics-header" onclick="toggleAnalyticsPanel()">
-        <span>📈 Behavioral Trends & Procrastination Index (Past 14 Days)</span>
-        <span id="chartToggleIcon">▲ Minimize</span>
+    <!-- Option A: Expandable Behavioral Analytics Card (Hidden Until Clicked) -->
+    <div class="analytics-panel" id="analyticsPanel">
+      <div class="analytics-header">
+        <span>📈 Behavioral Trends (14-Day Accountability & Procrastination Matrix)</span>
+        <button class="nav-btn" style="padding: 0.2rem 0.5rem;" onclick="toggleAnalyticsPanel()">✕ Close Chart</button>
       </div>
-      <div class="analytics-body" id="analyticsBody">
+      <div class="analytics-body">
         <canvas id="behaviorChart"></canvas>
       </div>
     </div>
@@ -619,7 +676,7 @@
                         {% set ns.found_color = p.color %}
                       {% endif %}
                     {% endfor %}
-                    <div class="task-card {{ 'completed' if task.status == 'completed' else '' }} {{ 'rescheduled' if task.status == 'rescheduled' else '' }}" 
+                    <div class="task-card {{ 'completed' if task.status == 'completed' else '' }} {{ 'rescheduled' if task.status == 'rescheduled' else '' }} {{ 'missed' if task.status == 'missed' else '' }}" 
                          style="background-color: {{ ns.found_color }};" 
                          onclick="showTaskDetail({{ task.id }})">
                       <div class="card-title">{{ task.title }}</div>
@@ -649,7 +706,7 @@
     </div>
   </main>
 
-  <!-- Modal 1: Export & Print Configuration Modal (Updated Labels) -->
+  <!-- Modal 1: Export & Print Configuration Modal -->
   <div class="modal-overlay" id="exportModal">
     <div class="modal-content" style="width: 480px;">
       <div class="modal-header">
@@ -665,13 +722,11 @@
         </select>
       </div>
 
-      <!-- Cleaned up label: removed (Sunday) -->
       <div class="form-group" id="customWeekBox" style="display: none;">
         <label>Pick Specific Week Start</label>
         <input type="date" id="exportCustomDate" value="{{ cur_week_str }}" onclick="this.showPicker()">
       </div>
 
-      <!-- Cleaned up label: removed (Eliminates empty rows) -->
       <div class="form-group">
         <label>2. Hour Span</label>
         <select id="exportHourSpan">
@@ -708,7 +763,6 @@
       <div class="modal-header">
         <h3 id="modalTitle" style="margin: 0; font-size: 1.1rem; color: var(--primary);">Tasks</h3>
         <div style="display: flex; gap: 0.4rem; align-items: center;">
-          <!-- Added Direct Print & PDF buttons for this table view -->
           <button class="nav-btn" onclick="printModalTable()">🖨️ Print List</button>
           <button class="nav-btn" style="color: #16a34a;" onclick="downloadModalPDF()">📥 Download PDF</button>
           <button class="nav-btn" onclick="closeTaskModal()">Close (✕)</button>
@@ -738,65 +792,122 @@
     const allPriorities = {{ priorities|tojson }};
     const chartData = {{ chart_data|tojson }};
 
-    // Render Option A Multi-line Behavioral Chart
-    const ctx = document.getElementById('behaviorChart').getContext('2d');
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const textColor = isDark ? '#94a3b8' : '#64748b';
-    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    // Reconciliation Check-in on Page Load
+    function initReconciliation() {
+      const now = new Date();
+      const overduePending = allUserTasks.filter(t => {
+        if (t.status !== 'pending') return false;
+        const taskEnd = new Date(`${t.date}T${t.time}`);
+        return taskEnd < now;
+      });
 
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: chartData.labels,
-        datasets: [
-          {
-            label: 'Completed On-Time',
-            data: chartData.completed,
-            borderColor: '#16a34a',
-            backgroundColor: 'rgba(22, 163, 74, 0.1)',
-            tension: 0.3,
-            fill: true,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Pushed (Procrastination Index)',
-            data: chartData.pushed,
-            borderColor: '#ea580c',
-            backgroundColor: 'rgba(234, 88, 12, 0.1)',
-            tension: 0.3,
-            fill: true,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Execution Rate %',
-            data: chartData.rate,
-            borderColor: '#0284c7',
-            borderDash: [5, 5],
-            tension: 0.3,
-            yAxisID: 'y1'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-          x: { ticks: { color: textColor }, grid: { color: gridColor } },
-          y: { type: 'linear', display: true, position: 'left', ticks: { color: textColor, stepSize: 1 }, grid: { color: gridColor } },
-          y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, ticks: { color: '#0284c7', callback: v => v + '%' }, grid: { drawOnChartArea: false } }
-        },
-        plugins: {
-          legend: { labels: { color: textColor, font: { size: 11, weight: 'bold' } } }
-        }
+      const banner = document.getElementById('reconcileBanner');
+      const list = document.getElementById('reconcileList');
+      if (overduePending.length === 0) {
+        banner.style.display = 'none';
+        return;
       }
-    });
 
+      list.innerHTML = '';
+      overduePending.slice(0, 5).forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'reconcile-item';
+        item.innerHTML = `
+          <div>
+            <b>${t.title}</b> &nbsp;•&nbsp; <small style="color: var(--metric-muted);">${t.date} at ${t.time}</small>
+          </div>
+          <div class="reconcile-actions">
+            <button class="btn-rec" style="color: #16a34a;" onclick="resolveReconciliation(${t.id}, 'completed')">Done On Time</button>
+            <button class="btn-rec" style="color: #0284c7;" onclick="resolveReconciliation(${t.id}, 'completed')">Done Late</button>
+            <button class="btn-rec" style="color: #ea580c;" onclick="rescheduleTask(${t.id})">Push</button>
+            <button class="btn-rec" style="color: #ef4444;" onclick="resolveReconciliation(${t.id}, 'missed')">Missed</button>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+      banner.style.display = 'flex';
+    }
+
+    async function resolveReconciliation(taskId, newStatus) {
+      await fetch('/api/task/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, status: newStatus })
+      });
+      location.reload();
+    }
+
+    window.addEventListener('DOMContentLoaded', initReconciliation);
+
+    // Expandable Behavioral Analytics Chart
+    let chartInstance = null;
     function toggleAnalyticsPanel() {
-      const b = document.getElementById('analyticsBody');
-      const icon = document.getElementById('chartToggleIcon');
-      b.classList.toggle('collapsed');
-      icon.innerText = b.classList.contains('collapsed') ? '▼ Expand Trends' : '▲ Minimize';
+      const panel = document.getElementById('analyticsPanel');
+      panel.classList.toggle('visible');
+
+      if (panel.classList.contains('visible') && !chartInstance) {
+        const ctx = document.getElementById('behaviorChart').getContext('2d');
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+        chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: chartData.labels,
+            datasets: [
+              {
+                label: 'Completed On-Time',
+                data: chartData.completed,
+                borderColor: '#16a34a',
+                backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                tension: 0.3,
+                fill: true,
+                yAxisID: 'y'
+              },
+              {
+                label: 'Pushed (Procrastination)',
+                data: chartData.pushed,
+                borderColor: '#ea580c',
+                backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                tension: 0.3,
+                fill: true,
+                yAxisID: 'y'
+              },
+              {
+                label: 'Missed Tasks',
+                data: chartData.missed,
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.3,
+                fill: true,
+                yAxisID: 'y'
+              },
+              {
+                label: 'Execution Score %',
+                data: chartData.rate,
+                borderColor: '#0284c7',
+                borderDash: [5, 5],
+                tension: 0.3,
+                yAxisID: 'y1'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: { ticks: { color: textColor }, grid: { color: gridColor } },
+              y: { type: 'linear', display: true, position: 'left', ticks: { color: textColor, stepSize: 1 }, grid: { color: gridColor } },
+              y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, ticks: { color: '#0284c7', callback: v => v + '%' }, grid: { drawOnChartArea: false } }
+            },
+            plugins: {
+              legend: { labels: { color: textColor, font: { size: 11, weight: 'bold' } } }
+            }
+          }
+        });
+      }
     }
 
     // Modal List Direct Print & PDF
@@ -1026,6 +1137,9 @@
       } else if (filter === 'rescheduled') {
         title.innerText = 'Pushed (Rescheduled) Tasks';
         filtered = allUserTasks.filter(t => t.status === 'rescheduled');
+      } else if (filter === 'missed') {
+        title.innerText = 'Missed Tasks';
+        filtered = allUserTasks.filter(t => t.status === 'missed');
       } else {
         title.innerText = 'All Scheduled Tasks';
       }
