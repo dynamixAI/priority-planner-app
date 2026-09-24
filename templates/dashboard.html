@@ -1,17 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ theme }}">
 <head>
   <meta charset="UTF-8">
-  <title>Priority Execution Dashboard</title>
+  <title>Weekly Priority Planner & Execution Dashboard</title>
   <style>
     :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --sidebar-bg: #ffffff;
+      --text: #0f172a;
+      --border: #e2e8f0;
+      --slot-hover: #f1f5f9;
+      --table-header: #f8fafc;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --metric-muted: #64748b;
+    }
+
+    [data-theme="dark"] {
       --bg: #0f172a;
       --card-bg: #1e293b;
       --sidebar-bg: #1e293b;
       --text: #f8fafc;
       --border: #334155;
-      --primary: #0284c7;
+      --slot-hover: #1e293b;
+      --table-header: #0f172a;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --metric-muted: #94a3b8;
     }
+
     * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -34,22 +52,34 @@
       flex-direction: column;
       overflow-y: auto;
     }
-    .brand { font-size: 1.15rem; font-weight: bold; color: #38bdf8; margin-bottom: 0.25rem; }
-    .user-tag { font-size: 0.75rem; color: #94a3b8; margin-bottom: 1.25rem; display: flex; justify-content: space-between; }
-    .user-tag a { color: #f87171; text-decoration: none; font-weight: 600; }
+    .brand { font-size: 1.2rem; font-weight: bold; color: var(--primary); margin-bottom: 0.25rem; }
+    .user-tag { font-size: 0.75rem; color: var(--metric-muted); margin-bottom: 1.25rem; display: flex; justify-content: space-between; }
+    .user-tag a { color: #ef4444; text-decoration: none; font-weight: 600; }
 
-    .panel-title { font-size: 0.85rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 0.85rem; }
+    .panel-title { font-size: 0.85rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: var(--metric-muted); margin-bottom: 0.85rem; }
     .form-group { margin-bottom: 0.75rem; }
-    .form-group label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; color: #cbd5e1; }
+    .form-group label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; color: var(--text); }
+    
+    /* Calendar Picker Fix */
     .form-group input, .form-group select {
       width: 100%;
-      padding: 0.5rem;
-      font-size: 0.8rem;
+      padding: 0.55rem;
+      font-size: 0.82rem;
       border: 1px solid var(--border);
       border-radius: 6px;
-      background: #0f172a;
-      color: #fff;
+      background: var(--card-bg);
+      color: var(--text);
     }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      display: block !important;
+      opacity: 0.8;
+      filter: invert(0.2);
+    }
+    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.9);
+    }
+
     .btn-create {
       width: 100%;
       background: var(--primary);
@@ -62,7 +92,7 @@
       cursor: pointer;
       margin-top: 0.5rem;
     }
-    .btn-create:hover { background: #0369a1; }
+    .btn-create:hover { background: var(--primary-hover); }
 
     /* Main Content */
     .main-content {
@@ -87,14 +117,14 @@
       border-radius: 6px;
       font-size: 0.8rem;
       text-decoration: none;
-      color: #cbd5e1;
+      color: var(--text);
       font-weight: 600;
       cursor: pointer;
     }
-    .nav-btn:hover { background: #334155; }
-    .week-title { font-size: 0.95rem; font-weight: bold; color: #38bdf8; }
+    .nav-btn:hover { background: var(--slot-hover); }
+    .week-title { font-size: 0.95rem; font-weight: bold; }
 
-    /* Interactive Anti-Procrastination Metrics Bar */
+    /* Anti-Procrastination Metrics Bar */
     .metrics-bar {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -107,13 +137,14 @@
       border-radius: 8px;
       padding: 0.65rem 0.85rem;
       cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
       transition: transform 0.15s ease, border-color 0.15s ease;
     }
     .metric-card:hover {
       transform: translateY(-2px);
-      border-color: #38bdf8;
+      border-color: var(--primary);
     }
-    .metric-label { font-size: 0.68rem; text-transform: uppercase; color: #94a3b8; font-weight: bold; }
+    .metric-label { font-size: 0.68rem; text-transform: uppercase; color: var(--metric-muted); font-weight: bold; }
     .metric-num { font-size: 1.35rem; font-weight: bold; margin-top: 0.2rem; }
 
     /* Priority Legend */
@@ -141,27 +172,27 @@
     }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 900px; }
     th, td { border: 1px solid var(--border); text-align: center; vertical-align: top; padding: 0.35rem; }
-    th { background: #0f172a; font-size: 0.75rem; font-weight: bold; color: #cbd5e1; }
-    .time-col { width: 80px; font-weight: bold; background: #0f172a; font-size: 0.75rem; color: #94a3b8; }
+    th { background: var(--table-header); font-size: 0.75rem; font-weight: bold; color: var(--text); }
+    .time-col { width: 85px; font-weight: bold; background: var(--table-header); font-size: 0.75rem; color: var(--metric-muted); }
 
-    .slot-cell { height: 75px; text-align: left; }
+    .slot-cell { height: 80px; text-align: left; }
     .task-card {
       border-radius: 6px;
       padding: 0.4rem;
       font-size: 0.75rem;
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.35rem;
       color: #ffffff;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
     }
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
     .task-card.rescheduled { outline: 2px dashed #ea580c; }
     .card-title { font-weight: bold; font-size: 0.75rem; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
     .card-detail { font-size: 0.68rem; margin-top: 2px; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }
-    .card-location { font-size: 0.65rem; margin-top: 2px; font-style: italic; opacity: 0.9; }
+    .card-location { font-size: 0.65rem; margin-top: 2px; font-style: italic; opacity: 0.95; }
     .card-actions { display: flex; justify-content: space-between; margin-top: 4px; gap: 2px; }
     .action-btn {
       background: rgba(15, 23, 42, 0.75);
-      border: 1px solid rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.3);
       border-radius: 3px;
       font-size: 0.6rem;
       padding: 1px 4px;
@@ -170,12 +201,12 @@
     }
     .action-btn:hover { background: rgba(15, 23, 42, 0.95); }
 
-    /* Modal for Quick List View */
+    /* Task List Modal */
     .modal-overlay {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.6);
       align-items: center;
       justify-content: center;
       z-index: 999;
@@ -190,6 +221,7 @@
       display: flex;
       flex-direction: column;
       padding: 1.25rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     }
     .modal-header {
       display: flex;
@@ -199,17 +231,14 @@
       border-bottom: 1px solid var(--border);
       padding-bottom: 0.5rem;
     }
-    .modal-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    .modal-table { width: 100%; border-collapse: collapse; }
     .modal-table th, .modal-table td {
       border: 1px solid var(--border);
       padding: 0.5rem;
       text-align: left;
       font-size: 0.8rem;
     }
-    .modal-table th { background: #0f172a; }
+    .modal-table th { background: var(--table-header); }
   </style>
 </head>
 <body>
@@ -225,13 +254,13 @@
     <div class="panel-title">Add New Task</div>
 
     <div class="form-group">
-      <label>1. Date</label>
-      <input type="date" id="inputDate" value="{{ cur_week_str }}">
+      <label>1. Date (Click to choose)</label>
+      <input type="date" id="inputDate" value="{{ cur_week_str }}" onclick="this.showPicker()">
     </div>
 
     <div class="form-group">
       <label>2. Start Time</label>
-      <input type="time" id="inputTime" value="09:10">
+      <input type="time" id="inputTime" value="09:00">
     </div>
 
     <div class="form-group">
@@ -272,7 +301,7 @@
     <button class="btn-create" onclick="submitTask()">Schedule Task</button>
   </aside>
 
-  <!-- Main Planner Area -->
+  <!-- Main Content -->
   <main class="main-content">
     <div class="top-nav">
       <div class="week-nav">
@@ -282,7 +311,7 @@
       </div>
       <div class="week-title">Week of {{ week_dates[0].strftime("%B %d, %Y") }}</div>
       <div>
-        <a href="/priority-setup" class="nav-btn">⚙️ Settings (Priority Schema)</a>
+        <a href="/settings" class="nav-btn">⚙️ Settings & Display</a>
         <button class="nav-btn" onclick="window.print()">Export / Print</button>
       </div>
     </div>
@@ -294,26 +323,26 @@
         <div class="metric-num">{{ metrics.total }}</div>
       </div>
       <div class="metric-card" onclick="openTaskModal('completed')">
-        <div class="metric-label" style="color: #4ade80;">Done (Completed)</div>
-        <div class="metric-num" style="color: #4ade80;">{{ metrics.done }}</div>
+        <div class="metric-label" style="color: #16a34a;">Done (Completed)</div>
+        <div class="metric-num" style="color: #16a34a;">{{ metrics.done }}</div>
       </div>
       <div class="metric-card" onclick="openTaskModal('pending')">
-        <div class="metric-label" style="color: #38bdf8;">Undone (Pending)</div>
-        <div class="metric-num" style="color: #38bdf8;">{{ metrics.undone }}</div>
+        <div class="metric-label" style="color: #0284c7;">Undone (Pending)</div>
+        <div class="metric-num" style="color: #0284c7;">{{ metrics.undone }}</div>
       </div>
       <div class="metric-card" onclick="openTaskModal('rescheduled')">
-        <div class="metric-label" style="color: #fb923c;">Pushed (Rescheduled)</div>
-        <div class="metric-num" style="color: #fb923c;">{{ metrics.pushed }}</div>
+        <div class="metric-label" style="color: #ea580c;">Pushed (Rescheduled)</div>
+        <div class="metric-num" style="color: #ea580c;">{{ metrics.pushed }}</div>
       </div>
       <div class="metric-card" onclick="openTaskModal('all')">
-        <div class="metric-label" style="color: #38bdf8;">Execution Rate</div>
-        <div class="metric-num" style="color: #38bdf8;">{{ metrics.rate }}%</div>
+        <div class="metric-label" style="color: #0284c7;">Execution Rate</div>
+        <div class="metric-num" style="color: #0284c7;">{{ metrics.rate }}%</div>
       </div>
     </div>
 
-    <!-- Active Palette Key -->
+    <!-- Active Priority Key -->
     <div class="legend-bar">
-      <span style="font-size: 0.75rem; font-weight: bold; color: #94a3b8;">Priorities:</span>
+      <span style="font-size: 0.75rem; font-weight: bold; color: var(--metric-muted);">Priorities:</span>
       {% for p in priorities %}
       <div class="legend-tag">
         <div class="legend-color" style="background: {{ p.color }};"></div>
@@ -329,20 +358,22 @@
           <tr>
             <th class="time-col">Time</th>
             {% for d in week_dates %}
-            <th>{{ d.strftime("%A") }}<br><span style="font-size: 0.7rem; color: #94a3b8;">{{ d.strftime("%d %b") }}</span></th>
+            <th>{{ d.strftime("%A") }}<br><span style="font-size: 0.7rem; color: var(--metric-muted);">{{ d.strftime("%d %b") }}</span></th>
             {% endfor %}
           </tr>
         </thead>
         <tbody>
           {% for slot in time_slots %}
+          {% set slot_hour = slot.split(':')[0] %}
           <tr>
             <td class="time-col">{{ slot }}</td>
             {% for d in week_dates %}
               {% set cell_date = d.strftime("%Y-%m-%d") %}
               <td class="slot-cell">
                 {% for task in tasks %}
-                  {% if task.date == cell_date and task.time == slot %}
-                    {% set ns = namespace(found_color='#38bdf8') %}
+                  {% set task_hour = task.time.split(':')[0] if ':' in task.time else task.time %}
+                  {% if task.date == cell_date and (task.time == slot or task_hour == slot_hour) %}
+                    {% set ns = namespace(found_color='#3b82f6') %}
                     {% for p in priorities %}
                       {% if p.id == task.priority_id or loop.index0 == task.priority_id or p.label == task.priority_id %}
                         {% set ns.found_color = p.color %}
@@ -350,8 +381,9 @@
                     {% endfor %}
                     <div class="task-card {{ 'completed' if task.status == 'completed' else '' }} {{ 'rescheduled' if task.status == 'rescheduled' else '' }}" style="background-color: {{ ns.found_color }};">
                       <div class="card-title">{{ task.title }}</div>
+                      <div class="card-detail">🕒 {{ task.time }} ({{ task.duration }})</div>
                       {% if task.detail %}
-                      <div class="card-detail">{{ task.detail }} ({{ task.duration }})</div>
+                      <div class="card-detail">{{ task.detail }}</div>
                       {% endif %}
                       {% if task.location %}
                       <div class="card-location">📍 {{ task.location }}</div>
@@ -361,7 +393,7 @@
                           {{ 'Undo' if task.status == 'completed' else 'Done' }}
                         </button>
                         <button class="action-btn" style="color: #fb923c;" onclick="rescheduleTask({{ task.id }})">Push</button>
-                        <button class="action-btn" style="color: #94a3b8;" onclick="deleteTask({{ task.id }})">✕</button>
+                        <button class="action-btn" style="color: #cbd5e1;" onclick="deleteTask({{ task.id }})">✕</button>
                       </div>
                     </div>
                   {% endif %}
@@ -375,11 +407,11 @@
     </div>
   </main>
 
-  <!-- Quick List View Modal for Anti-Procrastination Cards -->
+  <!-- Modal for Metric Card Task Tables -->
   <div class="modal-overlay" id="listModal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 id="modalTitle" style="margin: 0; font-size: 1.1rem; color: #38bdf8;">Tasks</h3>
+        <h3 id="modalTitle" style="margin: 0; font-size: 1.1rem; color: var(--primary);">Tasks</h3>
         <button class="nav-btn" onclick="closeTaskModal()">Close (✕)</button>
       </div>
       <div style="overflow-y: auto; max-height: 60vh;">
@@ -425,15 +457,15 @@
       }
 
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 1rem;">No tasks found in this view.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--metric-muted); padding: 1rem;">No tasks found in this view.</td></tr>';
       } else {
         filtered.forEach(t => {
-          const prio = allPriorities.find(p => p.id === t.priority_id) || { label: 'Standard', color: '#38bdf8' };
+          const prio = allPriorities.find(p => p.id === t.priority_id) || { label: 'Standard', color: '#0284c7' };
           const row = document.createElement('tr');
           row.innerHTML = `
             <td>${t.date}</td>
             <td>${t.time}</td>
-            <td><b>${t.title}</b> ${t.detail ? '<br><small style="color: #94a3b8;">' + t.detail + '</small>' : ''} ${t.location ? '<br><small>📍 ' + t.location + '</small>' : ''}</td>
+            <td><b>${t.title}</b> ${t.detail ? '<br><small style="color: var(--metric-muted);">' + t.detail + '</small>' : ''} ${t.location ? '<br><small>📍 ' + t.location + '</small>' : ''}</td>
             <td><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${prio.color}; margin-right: 6px;"></span>${prio.label}</td>
             <td><span style="text-transform: capitalize;">${t.status}</span></td>
             <td>
@@ -485,7 +517,7 @@
 
     async function rescheduleTask(taskId) {
       const new_date = prompt("Reschedule (push) to which date? (YYYY-MM-DD):", "{{ cur_week_str }}");
-      const new_time = prompt("Select new start time (e.g. 09:10, 11:50):", "09:10");
+      const new_time = prompt("Select new start time (e.g. 09:00, 14:00):", "09:00");
       if (new_date && new_time) {
         await fetch('/api/task/reschedule', {
           method: 'POST',

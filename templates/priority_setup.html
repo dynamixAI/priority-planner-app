@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Configure Priority Schema</title>
+  <title>Settings & Preferences | Priority Planner</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
+      background: #f1f5f9;
+      color: #0f172a;
       margin: 0;
       display: flex;
       align-items: center;
@@ -17,43 +17,71 @@
       box-sizing: border-box;
     }
     .card {
-      background: #1e293b;
+      background: #ffffff;
       padding: 2.25rem;
       border-radius: 12px;
-      width: 480px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-      border: 1px solid #334155;
+      width: 520px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      border: 1px solid #cbd5e1;
     }
-    h2 { margin-top: 0; color: #38bdf8; font-size: 1.35rem; }
-    p { font-size: 0.85rem; color: #94a3b8; line-height: 1.4; margin-bottom: 1.5rem; }
+    h2 { margin-top: 0; color: #0284c7; font-size: 1.4rem; }
+    p { font-size: 0.85rem; color: #64748b; line-height: 1.4; margin-bottom: 1.5rem; }
     
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #334155;
+      margin-top: 1.25rem;
+      margin-bottom: 0.65rem;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 0.35rem;
+    }
+
+    /* Theme Option Radio */
+    .theme-options { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .theme-label {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .theme-label:hover { border-color: #0284c7; }
+
     .priority-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
     .priority-row { display: flex; align-items: center; gap: 0.65rem; }
     
     input[type="color"] {
-      border: none;
+      border: 1px solid #cbd5e1;
       width: 38px;
       height: 38px;
       border-radius: 6px;
       cursor: pointer;
-      background: none;
-      padding: 0;
+      padding: 2px;
+      background: #fff;
     }
     input[type="text"] {
       flex: 1;
       padding: 0.6rem 0.75rem;
       border-radius: 6px;
-      border: 1px solid #475569;
-      background: #0f172a;
-      color: #fff;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #0f172a;
       font-size: 0.85rem;
     }
-    input[type="text"]:focus { outline: none; border-color: #38bdf8; }
+    input[type="text"]:focus { outline: none; border-color: #0284c7; }
 
     .btn-delete {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
       border-radius: 6px;
       width: 36px;
       height: 36px;
@@ -63,21 +91,21 @@
       cursor: pointer;
       font-weight: bold;
     }
-    .btn-delete:hover { background: rgba(239, 68, 68, 0.3); }
+    .btn-delete:hover { background: rgba(239, 68, 68, 0.2); }
 
     .btn-add {
-      background: transparent;
-      border: 1px dashed #475569;
-      color: #38bdf8;
+      background: #f8fafc;
+      border: 1px dashed #94a3b8;
+      color: #0284c7;
       width: 100%;
-      padding: 0.6rem;
+      padding: 0.65rem;
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.85rem;
       font-weight: 600;
       margin-bottom: 1.25rem;
     }
-    .btn-add:hover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.05); }
+    .btn-add:hover { border-color: #0284c7; background: #f0f9ff; }
 
     .btn-save {
       width: 100%;
@@ -91,14 +119,31 @@
       font-size: 0.95rem;
     }
     .btn-save:hover { background: #0369a1; }
+    .back-link { text-align: center; margin-top: 1rem; font-size: 0.85rem; }
+    .back-link a { color: #0284c7; text-decoration: none; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>Step 2: Choose Your Priority Schema</h2>
-    <p>Customize your tags and colors below, add new tiers, or remove ones you do not need. You can always refine these later in your settings.</p>
+    <h2>⚙️ Settings & Preferences</h2>
+    <p>Configure your display mode and customize your task priority schema.</p>
 
     <form method="POST">
+      <!-- Theme Selection -->
+      <div class="section-title">Appearance / Mode</div>
+      <div class="theme-options">
+        <label class="theme-label">
+          <input type="radio" name="theme" value="light" {% if theme == 'light' %}checked{% endif %}>
+          ☀️ Light Mode (Clean Default)
+        </label>
+        <label class="theme-label">
+          <input type="radio" name="theme" value="dark" {% if theme == 'dark' %}checked{% endif %}>
+          🌙 Dark Mode
+        </label>
+      </div>
+
+      <!-- Priority Schema -->
+      <div class="section-title">Priority Schema & Urgency Levels</div>
       <div class="priority-list" id="priorityList">
         {% for p in priorities %}
         <div class="priority-row">
@@ -110,8 +155,9 @@
       </div>
 
       <button type="button" class="btn-add" onclick="addRow()">+ Add Priority Tier</button>
-      <button type="submit" class="btn-save">Save & Open Planner Dashboard</button>
+      <button type="submit" class="btn-save">Save Settings & Open Dashboard</button>
     </form>
+    <div class="back-link"><a href="/dashboard">← Back to Dashboard without saving</a></div>
   </div>
 
   <script>
@@ -129,7 +175,7 @@
       const row = document.createElement('div');
       row.className = 'priority-row';
       row.innerHTML = `
-        <input type="color" name="colors[]" value="#38bdf8">
+        <input type="color" name="colors[]" value="#3b82f6">
         <input type="text" name="labels[]" placeholder="Custom Priority" required>
         <button type="button" class="btn-delete" onclick="removeRow(this)" title="Delete tier">✕</button>
       `;

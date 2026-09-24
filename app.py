@@ -9,7 +9,6 @@ app = Flask(__name__)
 app.secret_key = "priority-planner-secret-key-prod-random-seed"
 DB_NAME = "planner.db"
 
-# Eisenhower Matrix Defaults
 DEFAULT_PRIORITIES = [
     {"id": "p_q1", "label": "Q1: Urgent & Important", "color": "#ef4444"},
     {"id": "p_q2", "label": "Q2: Not Urgent, but Important", "color": "#3b82f6"},
@@ -17,8 +16,9 @@ DEFAULT_PRIORITIES = [
     {"id": "p_q4", "label": "Q4: Not Urgent & Not Important", "color": "#10b981"}
 ]
 
-# Complete 24-Hour Time Scale
-TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
+TIME_SLOTS = [
+    "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"
+]
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
@@ -34,6 +34,7 @@ def init_db():
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 priorities_json TEXT,
+                theme TEXT DEFAULT 'light',
                 failed_attempts INTEGER DEFAULT 0,
                 lock_until REAL DEFAULT 0,
                 is_permanently_locked INTEGER DEFAULT 0
@@ -42,6 +43,8 @@ def init_db():
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(users)")
         cols = [c[1] for c in cursor.fetchall()]
+        if "theme" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'light'")
         if "failed_attempts" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0")
         if "lock_until" not in cols:
@@ -58,7 +61,6 @@ def init_db():
                 location TEXT,
                 date TEXT NOT NULL,
                 time TEXT NOT NULL,
-                end_time TEXT NOT NULL,
                 duration TEXT NOT NULL,
                 priority_id TEXT NOT NULL,
                 status TEXT DEFAULT 'pending',
@@ -69,31 +71,10 @@ def init_db():
         task_cols = [c[1] for c in cursor.fetchall()]
         if "location" not in task_cols:
             conn.execute("ALTER TABLE tasks ADD COLUMN location TEXT")
-        if "end_time" not in task_cols:
-            conn.execute("ALTER TABLE tasks ADD COLUMN end_time TEXT DEFAULT ''")
 
-        # Auto-migrate any legacy user accounts to Eisenhower Matrix if needed
-        conn.execute("UPDATE users SET priorities_json = ? WHERE priorities_json LIKE '%Teaching%' OR priorities_json IS NULL", (json.dumps(DEFAULT_PRIORITIES),))
         conn.commit()
 
 init_db()
-
-def compute_end_time(start_str, duration_str):
-    try:
-        t = datetime.strptime(start_str, "%H:%M")
-    except ValueError:
-        return start_str
-    
-    minutes_map = {
-        "30 mins": 30,
-        "45 mins": 45,
-        "1 hour": 60,
-        "1.5 hours": 90,
-        "2 hours": 120
-    }
-    added_mins = minutes_map.get(duration_str, 60)
-    end_t = t + timedelta(minutes=added_mins)
-    return end_t.strftime("%H:%M")
 
 @app.route("/")
 def home():
@@ -122,7 +103,7 @@ def register():
             with get_db() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO users (username, email, password_hash, priorities_json, failed_attempts, lock_until, is_permanently_locked) VALUES (?, ?, ?, ?, 0, 0, 0)",
+                    "INSERT INTO users (username, email, password_hash, priorities_json, theme, failed_attempts, lock_until, is_permanently_locked) VALUES (?, ?, ?, ?, 'light', 0, 0, 0)",
                     (username, email, hashed, json.dumps(DEFAULT_PRIORITIES))
                 )
                 conn.commit()
@@ -209,6 +190,7 @@ def logout():
     session.clear()
     return redirect(url_for("home"))
 
+@app.route("/settings", methods=["GET", "POST"])
 @app.route("/priority-setup", methods=["GET", "POST"])
 def priority_setup():
     if "user_id" not in session:
@@ -218,6 +200,7 @@ def priority_setup():
     if request.method == "POST":
         labels = request.form.getlist("labels[]")
         colors = request.form.getlist("colors[]")
+        theme = request.form.get("theme", "light")
         
         new_priorities = []
         for i, (label, color) in enumerate(zip(labels, colors)):
@@ -233,15 +216,19 @@ def priority_setup():
             new_priorities = DEFAULT_PRIORITIES
 
         with get_db() as conn:
-            conn.execute("UPDATE users SET priorities_json = ? WHERE id = ?", (json.dumps(new_priorities), user_id))
+            conn.execute(
+                "UPDATE users SET priorities_json = ?, theme = ? WHERE id = ?",
+                (json.dumps(new_priorities), theme, user_id)
+            )
             conn.commit()
         return redirect(url_for("dashboard"))
 
     with get_db() as conn:
-        user = conn.execute("SELECT priorities_json FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = conn.execute("SELECT priorities_json, theme FROM users WHERE id = ?", (user_id,)).fetchone()
         priorities = json.loads(user["priorities_json"]) if user and user["priorities_json"] else DEFAULT_PRIORITIES
+        theme = user["theme"] if user and user["theme"] else "light"
 
-    return render_template("priority_setup.html", priorities=priorities)
+    return render_template("priority_setup.html", priorities=priorities, theme=theme)
 
 @app.route("/dashboard")
 def dashboard():
@@ -259,20 +246,20 @@ def dashboard():
     else:
         start_date = datetime.today().date() - timedelta(days=datetime.today().weekday())
 
-    # 7-day full week coverage (Monday through Sunday)
-    week_dates = [start_date + timedelta(days=i) for i in range(7)]
+    week_dates = [start_date + timedelta(days=i) for i in range(5)]
     prev_week = (start_date - timedelta(days=7)).strftime("%Y-%m-%d")
     next_week = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
     cur_week_str = start_date.strftime("%Y-%m-%d")
 
     with get_db() as conn:
-        user = conn.execute("SELECT priorities_json FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = conn.execute("SELECT priorities_json, theme FROM users WHERE id = ?", (user_id,)).fetchone()
         priorities = json.loads(user["priorities_json"]) if user and user["priorities_json"] else DEFAULT_PRIORITIES
+        theme = user["theme"] if user and user["theme"] else "light"
         
         week_date_strs = [d.strftime("%Y-%m-%d") for d in week_dates]
         placeholders = ",".join("?" for _ in week_date_strs)
         tasks = conn.execute(
-            f"SELECT * FROM tasks WHERE user_id = ? AND date IN ({placeholders})",
+            f"SELECT * FROM tasks WHERE user_id = ? AND date IN ({placeholders}) ORDER BY time ASC",
             [user_id] + week_date_strs
         ).fetchall()
 
@@ -286,6 +273,7 @@ def dashboard():
     return render_template(
         "dashboard.html",
         username=session.get("username"),
+        theme=theme,
         priorities=priorities,
         tasks=[dict(t) for t in tasks],
         week_dates=week_dates,
@@ -307,15 +295,15 @@ def add_task():
     if "user_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
-    
-    start_time = data.get("time", "09:00")
-    duration = data.get("duration", "1 hour")
-    end_time = compute_end_time(start_time, duration)
+    time_val = data.get("time", "09:00")
+    # Clean time format to HH:MM
+    if len(time_val) == 4:
+        time_val = "0" + time_val
 
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO tasks (user_id, title, detail, location, date, time, end_time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-            (session["user_id"], data.get("title"), data.get("detail"), data.get("location", ""), data.get("date"), start_time, end_time, duration, data.get("priority_id"))
+            "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+            (session["user_id"], data.get("title"), data.get("detail"), data.get("location", ""), data.get("date"), time_val, data.get("duration"), data.get("priority_id"))
         )
         conn.commit()
     return jsonify({"status": "success"})
@@ -335,18 +323,10 @@ def reschedule_task():
     if "user_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
-    task_id = data.get("task_id")
-    new_date = data.get("new_date")
-    new_time = data.get("new_time")
-
     with get_db() as conn:
-        task = conn.execute("SELECT duration FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"])).fetchone()
-        duration = task["duration"] if task else "1 hour"
-        new_end_time = compute_end_time(new_time, duration)
-
         conn.execute(
-            "UPDATE tasks SET date = ?, time = ?, end_time = ?, status = 'rescheduled' WHERE id = ? AND user_id = ?",
-            (new_date, new_time, new_end_time, task_id, session["user_id"])
+            "UPDATE tasks SET date = ?, time = ?, status = 'rescheduled' WHERE id = ? AND user_id = ?",
+            (data.get("new_date"), data.get("new_time"), data.get("task_id"), session["user_id"])
         )
         conn.commit()
     return jsonify({"status": "success"})
