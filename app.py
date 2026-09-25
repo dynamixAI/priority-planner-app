@@ -297,7 +297,6 @@ def dashboard():
         missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
         undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
 
-        # Behavioral Health Index Matrix
         if total_tasks > 0:
             score_raw = ((done_tasks * 1.0) + (pushed_tasks * 0.4) - (missed_tasks * 0.6)) / total_tasks * 100
             bhi_score = max(0, min(100, round(score_raw, 1)))
@@ -395,7 +394,6 @@ def update_status():
         if not task:
             return jsonify({"error": "Not found"}), 404
 
-        # Strict lock: Neither missed nor rescheduled tasks can be flipped to completed
         if task["status"] in ["missed", "rescheduled"] and target_status == "completed":
             return jsonify({"error": "Locked tasks cannot be marked done."}), 400
 
@@ -417,19 +415,18 @@ def reschedule_task():
         if not task:
             return jsonify({"error": "Not found"}), 404
 
-        if task["status"] == "missed":
-            # 1. Missed task flow: retain original record as 'missed', create new pending task
-            conn.execute(
-                "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                (session["user_id"], task["title"], task["detail"], task["location"], new_date, new_time, task["duration"], task["priority_id"])
-            )
-        else:
-            # 2. Active push flow: lock original task as 'rescheduled' (Pushed), create new pending task
-            conn.execute("UPDATE tasks SET status = 'rescheduled' WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
-            conn.execute(
-                "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                (session["user_id"], task["title"], task["detail"], task["location"], new_date, new_time, task["duration"], task["priority_id"])
-            )
+        # Disallow rescheduling tasks that have already been rescheduled
+        if task["status"] == "rescheduled":
+            return jsonify({"error": "Task has already been rescheduled."}), 400
+
+        # Mark original task as 'rescheduled' so it locks permanently
+        conn.execute("UPDATE tasks SET status = 'rescheduled' WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
+        
+        # Spawn the brand new commitment in 'pending' status
+        conn.execute(
+            "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+            (session["user_id"], task["title"], task["detail"], task["location"], new_date, new_time, task["duration"], task["priority_id"])
+        )
         conn.commit()
     return jsonify({"status": "success"})
 

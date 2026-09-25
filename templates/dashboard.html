@@ -314,7 +314,7 @@
     }
     .btn-rec:hover { background: var(--slot-hover); }
 
-    /* Anti-Procrastination Metrics Bar */
+    /* Metrics Bar */
     .metrics-bar {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
@@ -326,13 +326,19 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 0.65rem 0.85rem;
-      cursor: pointer;
       box-shadow: 0 1px 2px rgba(0,0,0,0.03);
       transition: transform 0.15s ease, border-color 0.15s ease;
     }
-    .metric-card:hover {
+    .metric-card.interactive {
+      cursor: pointer;
+    }
+    .metric-card.interactive:hover {
       transform: translateY(-2px);
       border-color: var(--primary);
+    }
+    .metric-card.static {
+      cursor: default;
+      user-select: none;
     }
     .metric-label { font-size: 0.68rem; text-transform: uppercase; color: var(--metric-muted); font-weight: bold; }
     .metric-num { font-size: 1.35rem; font-weight: bold; margin-top: 0.2rem; }
@@ -406,7 +412,10 @@
     }
     .task-card:hover { transform: scale(1.02); }
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
-    .task-card.rescheduled { outline: 2px dashed #ea580c; }
+    .task-card.rescheduled { 
+      opacity: 0.55; 
+      outline: 2px dashed #ea580c; 
+    }
     .task-card.missed {
       border: 2px solid #ef4444;
       opacity: 0.85;
@@ -416,6 +425,7 @@
     .card-detail { font-size: 0.68rem; margin-top: 2px; text-shadow: 0 1px 1px rgba(0,0,0,0.3); }
     .card-location { font-size: 0.65rem; margin-top: 2px; font-style: italic; opacity: 0.95; }
     .card-actions { display: flex; justify-content: space-between; margin-top: 4px; gap: 2px; }
+    
     .action-btn {
       background: rgba(15, 23, 42, 0.75);
       border: 1px solid rgba(255,255,255,0.3);
@@ -426,6 +436,16 @@
       color: #fff;
     }
     .action-btn:hover { background: rgba(15, 23, 42, 0.95); }
+    
+    .locked-label {
+      font-size: 0.62rem;
+      font-weight: 700;
+      color: #ea580c;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 1px 5px;
+      border-radius: 3px;
+      display: inline-block;
+    }
 
     /* Modals Generic */
     .modal-overlay {
@@ -459,7 +479,6 @@
       padding-bottom: 0.75rem;
     }
 
-    /* Fixed-Width Compact Table */
     .modal-table {
       width: 100%;
       border-collapse: separate;
@@ -655,27 +674,33 @@
 
     <!-- Anti-Procrastination Metrics Bar -->
     <div class="metrics-bar">
-      <div class="metric-card" onclick="openTaskModal('all')">
-        <div class="metric-label">Total Planned</div>
-        <div class="metric-num">{{ metrics.total }}</div>
+      <!-- 1. Lifetime Completed: Strictly static, non-clickable, no popup -->
+      <div class="metric-card static">
+        <div class="metric-label" style="color: #0284c7;">Lifetime Done</div>
+        <div class="metric-num" style="color: #0284c7;">{{ metrics.lifetime_completed }}</div>
       </div>
-      <div class="metric-card" onclick="openTaskModal('completed')">
+      <!-- 2. Done Filter -->
+      <div class="metric-card interactive" onclick="openTaskModal('completed')">
         <div class="metric-label" style="color: #16a34a;">Done</div>
         <div class="metric-num" style="color: #16a34a;">{{ metrics.done }}</div>
       </div>
-      <div class="metric-card" onclick="openTaskModal('pending')">
+      <!-- 3. Undone Filter -->
+      <div class="metric-card interactive" onclick="openTaskModal('pending')">
         <div class="metric-label" style="color: #0284c7;">Undone</div>
         <div class="metric-num" style="color: #0284c7;">{{ metrics.undone }}</div>
       </div>
-      <div class="metric-card" onclick="openTaskModal('rescheduled')">
+      <!-- 4. Pushed Filter -->
+      <div class="metric-card interactive" onclick="openTaskModal('rescheduled')">
         <div class="metric-label" style="color: #ea580c;">Pushed</div>
         <div class="metric-num" style="color: #ea580c;">{{ metrics.pushed }}</div>
       </div>
-      <div class="metric-card" onclick="openTaskModal('missed')">
+      <!-- 5. Missed Filter -->
+      <div class="metric-card interactive" onclick="openTaskModal('missed')">
         <div class="metric-label" style="color: #ef4444;">Missed</div>
         <div class="metric-num" style="color: #ef4444;">{{ metrics.missed }}</div>
       </div>
-      <div class="metric-card" style="border-left: 4px solid {{ metrics.bhi_color }};" onclick="toggleAnalyticsPanel()">
+      <!-- 6. Behavioral Health Index Card -->
+      <div class="metric-card interactive" style="border-left: 4px solid {{ metrics.bhi_color }};" onclick="toggleAnalyticsPanel()">
         <div class="metric-label" style="color: {{ metrics.bhi_color }};">Behavior Index 📈</div>
         <div class="metric-num" style="color: {{ metrics.bhi_color }}; font-size: 1.15rem;">
           {{ metrics.bhi_score }} <span style="font-size: 0.75rem; font-weight: normal;">({{ metrics.bhi_tier }})</span>
@@ -745,15 +770,22 @@
                       <div class="card-location">📍 {{ task.location }}</div>
                       {% endif %}
                       <div class="card-actions" onclick="event.stopPropagation()">
-                        {% if task.status != 'missed' %}
-                        <button class="action-btn" onclick="toggleComplete({{ task.id }}, '{{ task.status }}')">
-                          {{ 'Undo' if task.status == 'completed' else 'Done' }}
-                        </button>
+                        {% if task.status == 'rescheduled' %}
+                          <!-- Already rescheduled: Locked badge, no further reschedule possible -->
+                          <span class="locked-label">Rescheduled</span>
+                          <button class="action-btn" style="color: #cbd5e1;" onclick="deleteTask({{ task.id }})">✕</button>
+                        {% elif task.status == 'missed' %}
+                          <!-- Missed: One-time reschedule only -->
+                          <button class="action-btn" style="color: #fb923c;" onclick="openRescheduleModal({{ task.id }})">Reschedule</button>
+                          <button class="action-btn" style="color: #cbd5e1;" onclick="deleteTask({{ task.id }})">✕</button>
+                        {% else %}
+                          <!-- Pending / Completed -->
+                          <button class="action-btn" onclick="toggleComplete({{ task.id }}, '{{ task.status }}')">
+                            {{ 'Undo' if task.status == 'completed' else 'Done' }}
+                          </button>
+                          <button class="action-btn" style="color: #fb923c;" onclick="openRescheduleModal({{ task.id }})">Push</button>
+                          <button class="action-btn" style="color: #cbd5e1;" onclick="deleteTask({{ task.id }})">✕</button>
                         {% endif %}
-                        <button class="action-btn" style="color: #fb923c;" onclick="openRescheduleModal({{ task.id }})">
-                          {{ 'Reschedule' if task.status == 'missed' else 'Push' }}
-                        </button>
-                        <button class="action-btn" style="color: #cbd5e1;" onclick="deleteTask({{ task.id }})">✕</button>
                       </div>
                     </div>
                   {% endif %}
@@ -818,7 +850,7 @@
     </div>
   </div>
 
-  <!-- Modal 3: Redesigned Task List Modal -->
+  <!-- Modal 3: Task List Modal -->
   <div class="modal-overlay" id="listModal">
     <div class="modal-content">
       <div class="modal-header">
@@ -846,7 +878,7 @@
     </div>
   </div>
 
-  <!-- Modal 4: Clean Custom In-App Reschedule / Push Modal (Replaces browser prompt) -->
+  <!-- Modal 4: Custom In-App Reschedule Modal -->
   <div class="modal-overlay" id="rescheduleModal" style="z-index: 1001;">
     <div class="modal-content" style="width: 440px;">
       <div class="modal-header">
@@ -1215,7 +1247,6 @@
       document.getElementById('detailModal').style.display = 'none';
     }
 
-    /* Modal 4: Clean In-App Reschedule Functions */
     function openRescheduleModal(taskId) {
       const task = allUserTasks.find(t => t.id === taskId);
       if (!task) return;
@@ -1229,7 +1260,7 @@
 
       if (task.status === 'missed') {
         titleEl.innerText = "🔁 Reschedule Missed Task";
-        subtitleEl.innerText = `"${task.title}" will stay on record as missed, and a new pending task will be scheduled.`;
+        subtitleEl.innerText = `"${task.title}" will transition to rescheduled status, and a new pending task will be scheduled.`;
       } else {
         titleEl.innerText = "📅 Push / Reschedule Task";
         subtitleEl.innerText = `Move "${task.title}" forward to a new time.`;
@@ -1261,7 +1292,8 @@
       if (res.ok) {
         location.reload();
       } else {
-        alert("Failed to reschedule task.");
+        const err = await res.json();
+        alert(err.error || "Failed to reschedule task.");
       }
     }
 
@@ -1284,8 +1316,6 @@
       } else if (filter === 'missed') {
         title.innerText = 'Missed Tasks';
         filtered = allUserTasks.filter(t => t.status === 'missed');
-      } else {
-        title.innerText = 'All Scheduled Tasks';
       }
 
       if (filtered.length === 0) {
@@ -1296,7 +1326,9 @@
           const row = document.createElement('tr');
           
           let actionHtml = '';
-          if (t.status === 'missed') {
+          if (t.status === 'rescheduled') {
+            actionHtml = `<span style="font-size:0.75rem; color:var(--metric-muted); font-style:italic;">Rescheduled</span>`;
+          } else if (t.status === 'missed') {
             actionHtml = `<button class="tbl-action-btn reschedule" onclick="openRescheduleModal(${t.id})">Reschedule</button>`;
           } else if (t.status === 'completed') {
             actionHtml = `<button class="tbl-action-btn undo" onclick="toggleComplete(${t.id}, '${t.status}')">Undo</button>`;
@@ -1361,8 +1393,8 @@
     }
 
     async function toggleComplete(taskId, currentStatus) {
-      if (currentStatus === 'missed') {
-        alert("Missed tasks are permanently locked and cannot be marked done.");
+      if (currentStatus === 'missed' || currentStatus === 'rescheduled') {
+        alert("This task is locked and cannot be modified.");
         return;
       }
       const nextStatus = currentStatus === 'completed' ? 'pending' : 'completed';
