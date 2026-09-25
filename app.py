@@ -17,7 +17,7 @@ DEFAULT_PRIORITIES = [
 ]
 
 TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
-DEFAULT_ACTIVE_DAYS = ["0", "1", "2", "3", "4", "5", "6"]  # 0=Sunday, 6=Saturday
+DEFAULT_ACTIVE_DAYS = ["0", "1", "2", "3", "4", "5", "6"]
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)
@@ -297,8 +297,7 @@ def dashboard():
         missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
         undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
 
-        # Defensible Behavioral Health Index Formula
-        # Positive credit for done, mild deduction for push, heavier deduction for miss
+        # Behavioral Health Index Matrix
         if total_tasks > 0:
             score_raw = ((done_tasks * 1.0) + (pushed_tasks * 0.4) - (missed_tasks * 0.6)) / total_tasks * 100
             bhi_score = max(0, min(100, round(score_raw, 1)))
@@ -315,7 +314,6 @@ def dashboard():
             bhi_tier = "Avoidance"
             bhi_color = "#ef4444"
 
-        # Chronological 14-day history for Chart.js
         chart_labels = []
         chart_completed = []
         chart_pushed = []
@@ -348,6 +346,7 @@ def dashboard():
         cur_week_str=cur_week_str,
         time_slots=TIME_SLOTS,
         metrics={
+            "lifetime_completed": done_tasks,
             "total": total_tasks,
             "done": done_tasks,
             "undone": undone_tasks,
@@ -396,9 +395,9 @@ def update_status():
         if not task:
             return jsonify({"error": "Not found"}), 404
 
-        # Strict Accountability: If already missed, do not allow switching back to completed
-        if task["status"] == "missed" and target_status == "completed":
-            return jsonify({"error": "Missed tasks are permanently locked and cannot be marked done."}), 400
+        # Strict lock: Neither missed nor rescheduled tasks can be flipped to completed
+        if task["status"] in ["missed", "rescheduled"] and target_status == "completed":
+            return jsonify({"error": "Locked tasks cannot be marked done."}), 400
 
         conn.execute("UPDATE tasks SET status = ? WHERE id = ? AND user_id = ?", (target_status, task_id, session["user_id"]))
         conn.commit()
@@ -418,18 +417,18 @@ def reschedule_task():
         if not task:
             return jsonify({"error": "Not found"}), 404
 
-        # Option A Strict Accountability:
-        # If task is already missed, retain the original record as missed and create a new replacement task
         if task["status"] == "missed":
+            # 1. Missed task flow: retain original record as 'missed', create new pending task
             conn.execute(
                 "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                 (session["user_id"], task["title"], task["detail"], task["location"], new_date, new_time, task["duration"], task["priority_id"])
             )
         else:
-            # Active task pushed ahead of time
+            # 2. Active push flow: lock original task as 'rescheduled' (Pushed), create new pending task
+            conn.execute("UPDATE tasks SET status = 'rescheduled' WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
             conn.execute(
-                "UPDATE tasks SET date = ?, time = ?, status = 'rescheduled' WHERE id = ? AND user_id = ?",
-                (new_date, new_time, task_id, session["user_id"])
+                "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                (session["user_id"], task["title"], task["detail"], task["location"], new_date, new_time, task["duration"], task["priority_id"])
             )
         conn.commit()
     return jsonify({"status": "success"})
