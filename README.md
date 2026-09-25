@@ -28,5 +28,5 @@ An intelligent, interactive weekly planner and timetable web application built w
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/YOUR_GITHUB_USERNAME/priority-planner-app.git](https://github.com/YOUR_GITHUB_USERNAME/priority-planner-app.git)
+   git clone [https://github.com/dynamixai/priority-planner-app.git](https://github.com/dynamixai/priority-planner-app.git)
    cd priority-planner-app
