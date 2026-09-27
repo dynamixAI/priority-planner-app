@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+  <meta charset="UTF-8">
+  <title>Behavioural Trends | Priority Planner</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #efeeea;
+      --card-bg: #ffffff;
+      --text: #121214;
+      --border: #dcdad5;
+      --primary: #0891a3;
+      --primary-hover: #076e7d;
+      --metric-muted: #6b6f76;
+      --table-header: #f5f4f0;
+    }
+    [data-theme="dark"] {
+      --bg: #121214;
+      --card-bg: #1c1c1f;
+      --text: #f2f1ee;
+      --border: #2c2c30;
+      --primary: #00d6e8;
+      --primary-hover: #00b8c9;
+      --metric-muted: #9a9da3;
+      --table-header: #18181b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1.5rem;
+      min-height: 100vh;
+    }
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    h1 { font-size: 1.3rem; margin: 0; color: var(--primary); }
+    .back-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .range-presets { display: flex; gap: 0.5rem; }
+    .preset-btn {
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .preset-btn:hover { border-color: var(--primary); }
+    .preset-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+    }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      height: 65vh;
+    }
+  </style>
+</head>
+<body>
+  <div class="header-row">
+    <div>
+      <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+      <h1 style="margin-top: 0.35rem;">📈 Behavioural Trends</h1>
+    </div>
+    <div class="range-presets">
+      <a href="/trends?days=7" class="preset-btn {{ 'active' if days == 7 else '' }}">7 Days</a>
+      <a href="/trends?days=14" class="preset-btn {{ 'active' if days == 14 else '' }}">14 Days</a>
+      <a href="/trends?days=30" class="preset-btn {{ 'active' if days == 30 else '' }}">30 Days</a>
+      <a href="/trends?days=90" class="preset-btn {{ 'active' if days == 90 else '' }}">90 Days</a>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <canvas id="behaviorChart"></canvas>
+  </div>
+
+  <script>
+    const chartData = {{ chart_data|tojson }};
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+    const ctx = document.getElementById('behaviorChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartData.labels,
+        datasets: [
+          {
+            label: 'Completed On-Time',
+            data: chartData.completed,
+            borderColor: '#16a34a',
+            backgroundColor: '#16a34a',
+            borderWidth: 2,
+            pointRadius: 3,
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Pushed (Procrastination)',
+            data: chartData.pushed,
+            borderColor: '#7c3aed',
+            backgroundColor: '#7c3aed',
+            borderWidth: 2,
+            pointRadius: 3,
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Missed Tasks',
+            data: chartData.missed,
+            borderColor: '#ef4444',
+            backgroundColor: '#ef4444',
+            borderWidth: 2,
+            pointRadius: 3,
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Execution Score %',
+            data: chartData.rate,
+            borderColor: '#0284c7',
+            backgroundColor: '#0284c7',
+            borderWidth: 2,
+            pointRadius: 3,
+            borderDash: [5, 5],
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { ticks: { color: textColor }, grid: { color: gridColor } },
+          y: { type: 'linear', display: true, position: 'left', ticks: { color: textColor, stepSize: 1 }, grid: { color: gridColor } },
+          y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, ticks: { color: '#0284c7', callback: v => v + '%' }, grid: { drawOnChartArea: false } }
+        },
+        plugins: {
+          legend: { labels: { color: textColor, font: { size: 11, weight: 'bold' } } }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

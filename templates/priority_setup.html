@@ -3,27 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <title>Settings | Priority Planner</title>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <style>
     :root {
-      --bg: #f1f5f9;
+      --bg: #efeeea;
       --card-bg: #ffffff;
-      --text: #0f172a;
-      --border: #cbd5e1;
-      --subtext: #64748b;
-      --input-bg: #f8fafc;
-      --primary: #0284c7;
-      --primary-hover: #0369a1;
+      --text: #121214;
+      --border: #dcdad5;
+      --subtext: #6b6f76;
+      --input-bg: #f5f4f0;
+      --primary: #0891a3;
+      --primary-hover: #076e7d;
     }
 
     [data-theme="dark"] {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --text: #f8fafc;
-      --border: #334155;
-      --subtext: #94a3b8;
-      --input-bg: #0f172a;
-      --primary: #38bdf8;
-      --primary-hover: #0284c7;
+      --bg: #121214;
+      --card-bg: #1c1c1f;
+      --text: #f2f1ee;
+      --border: #2c2c30;
+      --subtext: #9a9da3;
+      --input-bg: #18181b;
+      --primary: #00d6e8;
+      --primary-hover: #00b8c9;
     }
 
     body {
@@ -49,7 +50,7 @@
     }
     h2 { margin-top: 0; color: var(--primary); font-size: 1.4rem; }
     p { font-size: 0.85rem; color: var(--subtext); line-height: 1.4; margin-bottom: 1.25rem; }
-    
+
     .section-title {
       font-size: 0.82rem;
       font-weight: bold;
@@ -62,7 +63,6 @@
       padding-bottom: 0.35rem;
     }
 
-    /* Instant Theme Switch */
     .theme-toggle-group {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -91,11 +91,9 @@
       color: #ffffff;
     }
 
-    /* Week Start Radio */
     .radio-row { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-size: 0.85rem; }
     .radio-row label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
 
-    /* Active Days Checkboxes */
     .days-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -115,10 +113,56 @@
     }
     .day-box input { margin-bottom: 0.25rem; }
 
-    /* Priority Schema */
+    .overdue-tooltip {
+      display: none;
+      position: absolute;
+      top: 130%;
+      left: 0;
+      width: 260px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.75rem;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      color: var(--text);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      z-index: 50;
+    }
+    .info-icon {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      color: var(--primary);
+      font-size: 0.7rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    @media (hover: hover) {
+      .info-icon:hover .overdue-tooltip { display: block; }
+    }
+    .overdue-tooltip.show { display: block; }
+    .preset-btn {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.72rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .preset-btn:hover { border-color: var(--primary); }
+
     .priority-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
     .priority-row { display: flex; align-items: center; gap: 0.65rem; }
-    
+
     input[type="color"] {
       border: 1px solid var(--border);
       width: 38px;
@@ -182,26 +226,36 @@
     .btn-save:hover { background: var(--primary-hover); }
     .back-link { text-align: center; margin-top: 1rem; font-size: 0.85rem; }
     .back-link a { color: var(--primary); text-decoration: none; }
+
+    .danger-zone {
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      background: rgba(239, 68, 68, 0.06);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1.5rem;
+    }
+    .danger-zone .section-title { color: #ef4444; border-bottom-color: rgba(239, 68, 68, 0.3); margin-top: 0; }
+    .danger-zone p { margin-bottom: 0.85rem; }
+    .btn-danger {
+      width: 100%;
+      padding: 0.7rem;
+      border-radius: 6px;
+      background: #ef4444;
+      color: #fff;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .btn-danger:hover { background: #dc2626; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>⚙️ Settings & Planner Preferences</h2>
-    <p>Configure calendar structure, display theme, and priority urgency tiers.</p>
-
-    <!-- Theme Switch -->
-    <div class="section-title">Theme Mode</div>
-    <div class="theme-toggle-group">
-      <button type="button" class="theme-btn {% if theme != 'dark' %}active{% endif %}" id="btnThemeLight" onclick="setInstantTheme('light')">
-        ☀️ Light Mode
-      </button>
-      <button type="button" class="theme-btn {% if theme == 'dark' %}active{% endif %}" id="btnThemeDark" onclick="setInstantTheme('dark')">
-        🌙 Dark Mode
-      </button>
-    </div>
+    <h2>Settings</h2>
 
     <form method="POST">
-      <!-- Calendar Structure -->
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="section-title">Calendar Start Day</div>
       <div class="radio-row">
         <label>
@@ -225,11 +279,31 @@
         <label class="day-box"><input type="checkbox" name="active_days[]" value="6" {% if '6' in active_days %}checked{% endif %}>Sat</label>
       </div>
 
-      <!-- Priority Schema -->
+      <div class="section-title">Overdue Behaviour</div>
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+        <label style="margin:0; font-size:0.85rem; font-weight:600; color:var(--text);">Flag a task as overdue after</label>
+        <input type="number" id="overdueThresholdInput" name="overdue_threshold_days" min="1" max="365"
+               value="{{ overdue_threshold_days }}"
+               style="width:70px; padding:0.4rem; border-radius:6px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); text-align:center;">
+        <span style="font-size:0.85rem; color:var(--text);">days</span>
+        <span class="info-icon" id="overdueInfoIcon" onclick="toggleOverdueTooltip(event)">?
+          <div class="overdue-tooltip" id="overdueTooltip">
+            This doesn't affect normal rescheduling — moving a task before it's due is always free. But if a task has been open this many days past when it was first scheduled, no matter how many times it's been moved, it starts costing your Behaviour Index 0.3 points — half of what a confirmed missed task costs, since it might still get finished.
+          </div>
+        </span>
+      </div>
+      <p style="font-size:0.78rem; color:var(--subtext); margin:0 0 0.5rem 0;">Not sure? Pick a starting point:</p>
+      <div style="display:flex; gap:0.5rem; margin-bottom:1.25rem; flex-wrap:wrap;">
+        <button type="button" class="preset-btn" onclick="setOverduePreset(30)">Lenient — 30 days</button>
+        <button type="button" class="preset-btn" onclick="setOverduePreset(14)">Balanced — 14 days</button>
+        <button type="button" class="preset-btn" onclick="setOverduePreset(7)">Strict — 7 days</button>
+      </div>
+
       <div class="section-title">Priority Schema & Urgency Levels</div>
       <div class="priority-list" id="priorityList">
         {% for p in priorities %}
         <div class="priority-row">
+          <input type="hidden" name="ids[]" value="{{ p.id }}">
           <input type="color" name="colors[]" value="{{ p.color }}">
           <input type="text" name="labels[]" value="{{ p.label }}" required>
           <button type="button" class="btn-delete" onclick="removeRow(this)" title="Delete tier">✕</button>
@@ -240,35 +314,173 @@
       <button type="button" class="btn-add" onclick="addRow()">+ Add Priority Tier</button>
       <button type="submit" class="btn-save">Save Settings & Update Calendar</button>
     </form>
+
+    <div class="danger-zone">
+      <p>Wipes everything back to a blank slate: every task, every priority tier, and every counter (Total Logged, Done, Missed, Pushed, Behaviour Index) — restored to the same defaults as a brand-new account. Your login and display theme are kept. This cannot be undone.</p>
+      <button type="button" class="btn-danger" onclick="resetAccount()">Reset Account — Wipe Everything</button>
+
+      <p style="margin-top:1rem;">Permanently deletes your account — every task, every priority tier, and your login itself. There is no recovery. You'll need to register again from scratch to use Priority Planner in future.</p>
+      <button type="button" class="btn-danger" onclick="deleteAccount()">Delete Account Permanently</button>
+    </div>
+
     <div class="back-link"><a href="/dashboard">← Back to Dashboard</a></div>
   </div>
 
+  <div id="appDialogModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.7); backdrop-filter: blur(4px); align-items:center; justify-content:center; z-index:1100;">
+    <div style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; width: 340px; max-width: 90%; padding: 1.5rem; box-shadow: 0 20px 35px -5px rgba(0,0,0,0.3);">
+      <p id="appDialogMessage" style="font-size: 0.9rem; color: var(--text); margin: 0 0 1.25rem 0; line-height: 1.5;"></p>
+      <input type="password" id="appDialogPasswordInput" placeholder="Your password" style="display:none; width:100%; box-sizing:border-box; padding:0.6rem; margin-bottom:1rem; border-radius:6px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); font-size:0.85rem;">
+      <div id="appDialogButtons" style="display:flex; gap:0.75rem;"></div>
+    </div>
+  </div>
+
   <script>
-    function setInstantTheme(mode) {
-      document.documentElement.setAttribute('data-theme', mode);
-      localStorage.setItem('planner-theme', mode);
-
-      document.getElementById('btnThemeLight').classList.toggle('active', mode === 'light');
-      document.getElementById('btnThemeDark').classList.toggle('active', mode === 'dark');
-
-      fetch('/api/theme', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: mode })
-      });
-    }
-
     const savedTheme = localStorage.getItem('planner-theme');
     if (savedTheme) {
       document.documentElement.setAttribute('data-theme', savedTheme);
-      document.getElementById('btnThemeLight').classList.toggle('active', savedTheme === 'light');
-      document.getElementById('btnThemeDark').classList.toggle('active', savedTheme === 'dark');
+    }
+
+    function showAppAlert(message) {
+      document.getElementById('appDialogMessage').innerText = message;
+      const buttons = document.getElementById('appDialogButtons');
+      buttons.innerHTML = '<button class="btn-save" style="margin:0; flex:1;" onclick="document.getElementById(\'appDialogModal\').style.display=\'none\';">OK</button>';
+      document.getElementById('appDialogModal').style.display = 'flex';
+    }
+
+    function appConfirm(message, yesLabel, noLabel) {
+      yesLabel = yesLabel || 'Yes';
+      noLabel = noLabel || 'No';
+      return new Promise(resolve => {
+        document.getElementById('appDialogMessage').innerText = message;
+        const buttons = document.getElementById('appDialogButtons');
+        buttons.innerHTML = '';
+
+        const noBtn = document.createElement('button');
+        noBtn.className = 'btn-save';
+        noBtn.style.cssText = 'margin:0; flex:1; background: transparent; border: 1px solid var(--border); color: var(--text);';
+        noBtn.innerText = noLabel;
+        noBtn.onclick = () => {
+          document.getElementById('appDialogModal').style.display = 'none';
+          resolve(false);
+        };
+
+        const yesBtn = document.createElement('button');
+        yesBtn.className = 'btn-save';
+        yesBtn.style.cssText = 'margin:0; flex:1; background:#ef4444;';
+        yesBtn.innerText = yesLabel;
+        yesBtn.onclick = () => {
+          document.getElementById('appDialogModal').style.display = 'none';
+          resolve(true);
+        };
+
+        buttons.appendChild(noBtn);
+        buttons.appendChild(yesBtn);
+        document.getElementById('appDialogModal').style.display = 'flex';
+      });
+    }
+
+    function appPasswordConfirm(message, yesLabel, noLabel) {
+      yesLabel = yesLabel || 'Confirm';
+      noLabel = noLabel || 'Cancel';
+      return new Promise(resolve => {
+        document.getElementById('appDialogMessage').innerText = message;
+        const input = document.getElementById('appDialogPasswordInput');
+        input.style.display = 'block';
+        input.value = '';
+        const buttons = document.getElementById('appDialogButtons');
+        buttons.innerHTML = '';
+
+        const noBtn = document.createElement('button');
+        noBtn.className = 'btn-save';
+        noBtn.style.cssText = 'margin:0; flex:1; background: transparent; border: 1px solid var(--border); color: var(--text);';
+        noBtn.innerText = noLabel;
+        noBtn.onclick = () => {
+          input.style.display = 'none';
+          document.getElementById('appDialogModal').style.display = 'none';
+          resolve(null);
+        };
+
+        const yesBtn = document.createElement('button');
+        yesBtn.className = 'btn-save';
+        yesBtn.style.cssText = 'margin:0; flex:1; background:#ef4444;';
+        yesBtn.innerText = yesLabel;
+        yesBtn.onclick = () => {
+          const pw = input.value;
+          input.style.display = 'none';
+          document.getElementById('appDialogModal').style.display = 'none';
+          resolve(pw);
+        };
+
+        buttons.appendChild(noBtn);
+        buttons.appendChild(yesBtn);
+        document.getElementById('appDialogModal').style.display = 'flex';
+      });
+    }
+
+    async function deleteAccount() {
+      const password = await appPasswordConfirm(
+        "This permanently deletes your account and everything in it. There is no recovery. Enter your password to confirm.",
+        "Delete Forever", "Cancel"
+      );
+      if (password === null) return;
+      if (!password) {
+        showAppAlert("Password is required to delete your account.");
+        return;
+      }
+
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ password })
+      });
+
+      if (res.ok) {
+        window.location.href = '/';
+      } else {
+        const err = await res.json();
+        showAppAlert(err.error || "Something went wrong — your account was not deleted.");
+      }
+    }
+
+    async function resetAccount() {
+      const confirmed = await appConfirm(
+        "This wipes every task, priority, and counter back to a blank new-account state. Your login and theme stay. This cannot be undone. Continue?",
+        "Reset Account", "Cancel"
+      );
+      if (!confirmed) return;
+
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+      const res = await fetch('/api/account/reset', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken }
+      });
+      if (res.ok) {
+        window.location.href = '/dashboard';
+      } else {
+        showAppAlert("Something went wrong — your account was not reset. Please try again.");
+      }
+    }
+
+    function toggleOverdueTooltip(e) {
+      e.stopPropagation();
+      document.getElementById('overdueTooltip').classList.toggle('show');
+    }
+    document.addEventListener('click', function(e) {
+      const icon = document.getElementById('overdueInfoIcon');
+      const tooltip = document.getElementById('overdueTooltip');
+      if (icon && tooltip && !icon.contains(e.target)) {
+        tooltip.classList.remove('show');
+      }
+    });
+    function setOverduePreset(days) {
+      document.getElementById('overdueThresholdInput').value = days;
     }
 
     function removeRow(btn) {
       const list = document.getElementById('priorityList');
       if (list.children.length <= 1) {
-        alert("You must keep at least one priority level.");
+        showAppAlert("You must keep at least one priority level.");
         return;
       }
       btn.closest('.priority-row').remove();
@@ -279,6 +491,7 @@
       const row = document.createElement('div');
       row.className = 'priority-row';
       row.innerHTML = `
+        <input type="hidden" name="ids[]" value="">
         <input type="color" name="colors[]" value="#38bdf8">
         <input type="text" name="labels[]" placeholder="Custom Priority" required>
         <button type="button" class="btn-delete" onclick="removeRow(this)" title="Delete tier">✕</button>
