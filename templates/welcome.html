@@ -1,26 +1,275 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <title>Welcome | Priority Planner & Execution Dashboard</title>
+  <script>
+    const cachedTheme = localStorage.getItem('planner-theme');
+    document.documentElement.setAttribute('data-theme', cachedTheme || 'dark');
+  </script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
-    .card { background: #1e293b; padding: 2.5rem; border-radius: 12px; width: 440px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.4); border: 1px solid #334155; }
-    h1 { font-size: 1.6rem; margin-bottom: 0.5rem; color: #38bdf8; }
-    p { font-size: 0.9rem; color: #94a3b8; line-height: 1.5; margin-bottom: 1.75rem; }
-    .btn { display: block; width: 100%; box-sizing: border-box; padding: 0.75rem; border-radius: 6px; font-weight: bold; text-decoration: none; margin-bottom: 0.75rem; font-size: 0.95rem; cursor: pointer; border: none; }
-    .btn-primary { background: #0284c7; color: white; }
-    .btn-primary:hover { background: #0369a1; }
-    .btn-outline { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
-    .btn-outline:hover { background: #334155; }
+    :root {
+      --bg: #efeeea;
+      --card-bg: #ffffff;
+      --text: #121214;
+      --border: #dcdad5;
+      --subtext: #6b6f76;
+      --primary: #0891a3;
+      --primary-hover: #076e7d;
+      --accent2: #f59e0b;
+    }
+    [data-theme="dark"] {
+      --bg: #121214;
+      --card-bg: #1c1c1f;
+      --text: #f2f1ee;
+      --border: #2c2c30;
+      --subtext: #9a9da3;
+      --primary: #00d6e8;
+      --primary-hover: #00b8c9;
+      --accent2: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1.5rem;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .card {
+      background: var(--card-bg);
+      padding: 2rem 2.25rem 2.25rem;
+      border-radius: 16px;
+      width: 460px;
+      max-width: 100%;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      user-select: none;
+    }
+
+    .kicker { font-size: 0.68rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--primary); margin-bottom: 0.35rem; }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      margin-bottom: 0.5rem;
+      touch-action: pan-y;
+    }
+    .buddy-float { animation: floatY 3.2s ease-in-out infinite; }
+    @keyframes floatY {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+    .blink { animation: blink 4.5s ease-in-out infinite; transform-origin: center; }
+    @keyframes blink {
+      0%, 92%, 100% { transform: scaleY(1); }
+      95% { transform: scaleY(0.1); }
+    }
+    .arm-wave { animation: wave 2.4s ease-in-out infinite; transform-origin: 112px 122px; }
+    @keyframes wave {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(-20deg); }
+      50% { transform: rotate(0deg); }
+      75% { transform: rotate(-12deg); }
+    }
+
+    .prop-group { opacity: 0; transition: opacity 0.35s ease; }
+    .prop-group.active { opacity: 1; }
+
+    .draw-line { stroke-dasharray: 60; stroke-dashoffset: 60; animation: drawIn 2.5s ease-in-out infinite; }
+    @keyframes drawIn {
+      0% { stroke-dashoffset: 60; }
+      45% { stroke-dashoffset: 0; }
+      70% { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: 60; }
+    }
+    .slide-card { animation: slideAcross 2.6s ease-in-out infinite; }
+    @keyframes slideAcross {
+      0% { transform: translateX(0); opacity: 1; }
+      45% { transform: translateX(22px); opacity: 0.4; }
+      50% { transform: translateX(-22px); opacity: 0; }
+      55% { transform: translateX(-22px); opacity: 0.4; }
+      100% { transform: translateX(0); opacity: 1; }
+    }
+    .ring-fill { stroke-dasharray: 175; stroke-dashoffset: 175; animation: ringFill 2.8s ease-in-out infinite; transform-origin: center; }
+    @keyframes ringFill {
+      0% { stroke-dashoffset: 175; }
+      60%, 100% { stroke-dashoffset: 40; }
+    }
+    .tick-rise { animation: tickRise 2.8s ease-in-out infinite; }
+    @keyframes tickRise {
+      0%, 15% { transform: scaleY(0); }
+      50%, 100% { transform: scaleY(1); }
+    }
+
+    .paused .buddy-float,
+    .paused .blink,
+    .paused .arm-wave,
+    .paused .draw-line,
+    .paused .slide-card,
+    .paused .ring-fill,
+    .paused .tick-rise {
+      animation-play-state: paused;
+    }
+
+    .dots { display: flex; justify-content: center; gap: 0.4rem; margin-bottom: 1.1rem; }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--border);
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      border: none;
+      padding: 0;
+    }
+    .dot.active { background: var(--primary); transform: scale(1.3); }
+
+    h1 { font-size: 1.35rem; margin: 0 0 0.4rem 0; color: var(--primary); min-height: 1.7rem; }
+    p.slide-desc { font-size: 0.85rem; color: var(--subtext); line-height: 1.5; margin: 0 0 1.5rem 0; min-height: 2.6rem; }
+
+    .btn { display: block; width: 100%; box-sizing: border-box; padding: 0.75rem; border-radius: 8px; font-weight: bold; text-decoration: none; margin-bottom: 0.75rem; font-size: 0.95rem; cursor: pointer; border: none; }
+    .btn-primary { background: var(--primary); color: #ffffff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--bg); }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Priority Execution Dashboard</h1>
-    <p>Welcome! Plan your weeks with precision, set custom priority tiers, and conquer daily delivery with automated rescheduling.</p>
+  <div class="card" id="welcomeCard">
+    <div class="kicker">Priority Planner</div>
+    <div class="stage" id="stage">
+      <svg viewBox="0 0 260 200" width="100%" height="100%">
+        <!-- Humanoid buddy: head, body, two arms, two legs -->
+        <g class="buddy-float">
+          <line x1="122" y1="160" x2="116" y2="186" stroke="var(--primary)" stroke-width="7" stroke-linecap="round"/>
+          <line x1="138" y1="160" x2="144" y2="186" stroke="var(--primary)" stroke-width="7" stroke-linecap="round"/>
+          <rect x="110" y="115" width="40" height="48" rx="18" fill="var(--primary)" opacity="0.9"/>
+          <path d="M 148 122 Q 164 132 168 150" stroke="var(--primary)" stroke-width="7" fill="none" stroke-linecap="round"/>
+          <path class="arm-wave" d="M 112 122 Q 96 112 90 94" stroke="var(--primary)" stroke-width="7" fill="none" stroke-linecap="round"/>
+          <circle cx="130" cy="95" r="22" fill="var(--primary)" opacity="0.9"/>
+          <circle cx="122" cy="92" r="3.2" fill="var(--card-bg)" class="blink"/>
+          <circle cx="138" cy="92" r="3.2" fill="var(--card-bg)" class="blink"/>
+          <path d="M 120 104 Q 130 111 140 104" stroke="var(--card-bg)" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        </g>
+
+        <g class="prop-group" data-slide="0">
+          <rect x="30" y="40" width="46" height="42" rx="5" fill="none" stroke="var(--text)" stroke-width="3"/>
+          <line x1="30" y1="54" x2="76" y2="54" stroke="var(--text)" stroke-width="3"/>
+          <path class="draw-line" d="M 40 68 L 49 76 L 66 58" stroke="var(--accent2)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+
+        <g class="prop-group" data-slide="1">
+          <g class="slide-card">
+            <rect x="185" y="42" width="52" height="34" rx="6" fill="var(--accent2)" opacity="0.85"/>
+            <line x1="193" y1="53" x2="221" y2="53" stroke="var(--card-bg)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="193" y1="62" x2="212" y2="62" stroke="var(--card-bg)" stroke-width="3" stroke-linecap="round"/>
+          </g>
+          <path d="M 190 88 Q 210 96 228 86" stroke="var(--text)" stroke-width="2.5" fill="none" stroke-linecap="round" marker-end="url(#arrowhead)"/>
+        </g>
+        <defs>
+          <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="var(--text)"/>
+          </marker>
+        </defs>
+
+        <g class="prop-group" data-slide="2">
+          <circle cx="205" cy="60" r="28" fill="none" stroke="var(--border)" stroke-width="6"/>
+          <circle class="ring-fill" cx="205" cy="60" r="28" fill="none" stroke="var(--accent2)" stroke-width="6" stroke-linecap="round" transform="rotate(-90 205 60)"/>
+          <g>
+            <rect class="tick-rise" x="24" y="70" width="7" height="14" fill="var(--text)" style="transform-origin: 24px 84px; animation-delay: 0s;"/>
+            <rect class="tick-rise" x="36" y="58" width="7" height="26" fill="var(--text)" style="transform-origin: 36px 84px; animation-delay: 0.15s;"/>
+            <rect class="tick-rise" x="48" y="46" width="7" height="38" fill="var(--accent2)" style="transform-origin: 48px 84px; animation-delay: 0.3s;"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="dots" id="slideDots"></div>
+    <h1 id="slideTitle"></h1>
+    <p class="slide-desc" id="slideDesc"></p>
+
     <a href="/register" class="btn btn-primary">Create Free Account</a>
     <a href="/login" class="btn btn-outline">Sign In</a>
   </div>
+
+  <script>
+    const slides = [
+      { title: "The planner that works either way", desc: "Built for the naturally organised, the occasional slip-up, and anyone who just wants their week sorted." },
+      { title: "Life happens — move things freely", desc: "Reschedule before something's due at no cost. Real weeks don't go perfectly, and this doesn't pretend yours will." },
+      { title: "Always know where you stand", desc: "A clear, honest picture of your week — what's done, what's open, and what needs attention." }
+    ];
+
+    let current = 0;
+    let autoTimer = null;
+    let isPaused = false;
+
+    const cardEl = document.getElementById('welcomeCard');
+    const stageEl = document.getElementById('stage');
+    const titleEl = document.getElementById('slideTitle');
+    const descEl = document.getElementById('slideDesc');
+    const dotsEl = document.getElementById('slideDots');
+    const propGroups = document.querySelectorAll('.prop-group');
+
+    slides.forEach((_, i) => {
+      const dot = document.createElement('button');
+      dot.className = 'dot';
+      dot.setAttribute('aria-label', `Slide ${i + 1}`);
+      dot.onclick = () => { goTo(i); };
+      dotsEl.appendChild(dot);
+    });
+
+    function render() {
+      titleEl.innerText = slides[current].title;
+      descEl.innerText = slides[current].desc;
+      propGroups.forEach(g => {
+        g.classList.toggle('active', Number(g.dataset.slide) === current);
+      });
+      Array.from(dotsEl.children).forEach((d, i) => d.classList.toggle('active', i === current));
+    }
+
+    function goTo(i) {
+      current = (i + slides.length) % slides.length;
+      render();
+    }
+
+    function startAutoAdvance() {
+      if (autoTimer) clearInterval(autoTimer);
+      autoTimer = setInterval(() => {
+        if (!isPaused) goTo(current + 1);
+      }, 4200);
+    }
+
+    cardEl.addEventListener('mouseenter', () => {
+      isPaused = true;
+      cardEl.classList.add('paused');
+    });
+    cardEl.addEventListener('mouseleave', () => {
+      isPaused = false;
+      cardEl.classList.remove('paused');
+    });
+
+    let touchStartX = null;
+    stageEl.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+    stageEl.addEventListener('touchend', (e) => {
+      if (touchStartX === null) return;
+      const deltaX = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(deltaX) > 40) {
+        if (deltaX < 0) goTo(current + 1);
+        else goTo(current - 1);
+      }
+      touchStartX = null;
+    });
+
+    render();
+    startAutoAdvance();
+  </script>
 </body>
 </html>

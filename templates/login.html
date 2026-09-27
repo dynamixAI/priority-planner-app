@@ -1,33 +1,58 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <title>Login | Priority Planner</title>
+  <script>
+    const cachedTheme = localStorage.getItem('planner-theme');
+    document.documentElement.setAttribute('data-theme', cachedTheme || 'dark');
+  </script>
   <style>
+    :root {
+      --bg: #efeeea;
+      --card-bg: #ffffff;
+      --text: #121214;
+      --border: #dcdad5;
+      --subtext: #6b6f76;
+      --input-bg: #f5f4f0;
+      --primary: #0891a3;
+      --primary-hover: #076e7d;
+    }
+    [data-theme="dark"] {
+      --bg: #121214;
+      --card-bg: #1c1c1f;
+      --text: #f2f1ee;
+      --border: #2c2c30;
+      --subtext: #9a9da3;
+      --input-bg: #18181b;
+      --primary: #00d6e8;
+      --primary-hover: #00b8c9;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
+      background: var(--bg);
+      color: var(--text);
       margin: 0;
       display: flex;
       align-items: center;
       justify-content: center;
       height: 100vh;
+      transition: background 0.15s ease, color 0.15s ease;
     }
     .card {
-      background: #1e293b;
+      background: var(--card-bg);
       padding: 2.25rem;
       border-radius: 12px;
       width: 380px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-      border: 1px solid #334155;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
     }
-    h2 { margin-top: 0; margin-bottom: 0.5rem; font-size: 1.4rem; color: #38bdf8; }
-    
+    h2 { margin-top: 0; margin-bottom: 0.5rem; font-size: 1.4rem; color: var(--primary); }
+
     .alert-banner {
-      background: rgba(239, 68, 68, 0.15);
+      background: rgba(239, 68, 68, 0.12);
       border: 1px solid #ef4444;
-      color: #fca5a5;
+      color: #ef4444;
       padding: 0.65rem 0.85rem;
       border-radius: 6px;
       font-size: 0.82rem;
@@ -36,7 +61,7 @@
     }
 
     .form-group { margin-bottom: 0.9rem; }
-    label { display: block; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.35rem; color: #cbd5e1; }
+    label { display: block; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.35rem; color: var(--subtext); }
     .input-wrapper { position: relative; display: flex; align-items: center; }
     input {
       width: 100%;
@@ -44,31 +69,31 @@
       padding: 0.65rem;
       padding-right: 2.5rem;
       border-radius: 6px;
-      border: 1px solid #475569;
-      background: #0f172a;
-      color: #fff;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
       font-size: 0.85rem;
     }
-    input:focus { outline: none; border-color: #38bdf8; }
+    input:focus { outline: none; border-color: var(--primary); }
     .toggle-btn {
       position: absolute;
       right: 8px;
       background: none;
       border: none;
       cursor: pointer;
-      color: #94a3b8;
+      color: var(--subtext);
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 4px;
     }
-    .toggle-btn:hover { color: #38bdf8; }
+    .toggle-btn:hover { color: var(--primary); }
     .toggle-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .btn {
       width: 100%;
       padding: 0.75rem;
       border-radius: 6px;
-      background: #0284c7;
+      background: var(--primary);
       color: #fff;
       font-weight: bold;
       border: none;
@@ -76,9 +101,9 @@
       margin-top: 0.5rem;
       font-size: 0.9rem;
     }
-    .btn:hover { background: #0369a1; }
+    .btn:hover { background: var(--primary-hover); }
     .links { display: flex; justify-content: space-between; margin-top: 1rem; font-size: 0.8rem; }
-    .links a { color: #38bdf8; text-decoration: none; }
+    .links a { color: var(--primary); text-decoration: none; }
   </style>
 </head>
 <body>
@@ -92,6 +117,7 @@
     {% endwith %}
 
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
         <label>Username or Email</label>
         <input type="text" name="username" required>
