@@ -317,16 +317,14 @@ def reset_password(token):
 
 @app.route("/diag")
 def diag():
-    # TEMPORARY debugging route — remove once the Render login hang is solved.
-    # Each step runs in a daemon thread with its own timeout, so the page
-    # always returns (worst case ~24s, under gunicorn's 30s worker limit).
+    # TEMPORARY debugging route (v3) — remove once the Render login hang is solved.
+    # Tests Turso through its plain HTTP API instead of the libsql client.
     import socket
     import threading
     import urllib.request
     import urllib.error
 
     results = {}
-    holder = {}
     host = TURSO_DATABASE_URL.replace("libsql://", "").replace("https://", "").split("/")[0]
 
     def run_step(name, fn, timeout):
@@ -368,12 +366,27 @@ def diag():
         except urllib.error.HTTPError as e:
             return f"HTTP {e.code}"
 
-    def connect_step():
-        holder["conn"] = get_db()
-
-    def select_step():
-        rows = fetch_all(holder["conn"], "SELECT 1 AS one")
-        return f"rows={len(rows)}"
+    def http_query_step():
+        payload = json.dumps({"requests": [
+            {"type": "execute", "stmt": {"sql": "SELECT 1 AS one"}},
+            {"type": "close"}
+        ]}).encode()
+        req = urllib.request.Request(
+            f"https://{host}/v2/pipeline",
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {TURSO_AUTH_TOKEN}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                body = json.loads(r.read().decode())
+            first = body["results"][0]
+            return "result_type=" + str(first.get("type"))
+        except urllib.error.HTTPError as e:
+            return f"HTTP {e.code}"
 
     def hash_step():
         h = generate_password_hash("diag-test-password")
@@ -381,9 +394,7 @@ def diag():
 
     run_step("dns_lookup", dns_step, 3)
     run_step("plain_https_to_turso", https_step, 5)
-    run_step("libsql_connect", connect_step, 3)
-    if "conn" in holder:
-        run_step("libsql_select_1", select_step, 8)
+    run_step("turso_http_api_select_1", http_query_step, 10)
     run_step("password_hash_and_check", hash_step, 5)
 
     return jsonify(results)
