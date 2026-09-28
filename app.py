@@ -315,6 +315,39 @@ def reset_password(token):
     return render_template("reset_password.html")
 
 
+@app.route("/diag")
+def diag():
+    # TEMPORARY debugging route — remove once the Render login hang is solved.
+    # Prints each step to the logs with flush=True so lines still appear even
+    # if a later step hangs. Only exception TYPE names are logged, never values.
+    results = {}
+    holder = {}
+
+    def step(name, fn):
+        start = time.time()
+        print(f"[diag] starting: {name}", flush=True)
+        try:
+            fn()
+            elapsed = round(time.time() - start, 2)
+            print(f"[diag] done: {name} in {elapsed}s", flush=True)
+            results[name] = f"ok ({elapsed}s)"
+        except Exception as e:
+            elapsed = round(time.time() - start, 2)
+            print(f"[diag] FAILED: {name} after {elapsed}s: {type(e).__name__}", flush=True)
+            results[name] = f"failed ({type(e).__name__}, {elapsed}s)"
+
+    step("connect", lambda: holder.__setitem__("conn", get_db()))
+    if "conn" in holder:
+        step("select_1", lambda: fetch_all(holder["conn"], "SELECT 1 AS one"))
+        step("param_query", lambda: fetch_one(
+            holder["conn"], "SELECT id FROM users WHERE username = ? LIMIT 1", ("__diag__",)))
+    step("hash_password", lambda: holder.__setitem__("h", generate_password_hash("diag-test-password")))
+    if "h" in holder:
+        step("check_password", lambda: check_password_hash(holder["h"], "diag-test-password"))
+
+    return jsonify(results)
+
+
 @app.route("/logout")
 def logout():
     session.clear()
