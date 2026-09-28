@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
-import libsql
+from turso_http import TursoHTTPConnection
 
 load_dotenv()
 
@@ -40,7 +40,7 @@ DEFAULT_ACTIVE_DAYS = ["0", "1", "2", "3", "4", "5", "6"]
 
 
 def get_db():
-    return libsql.connect(database=TURSO_DATABASE_URL, auth_token=TURSO_AUTH_TOKEN)
+    return TursoHTTPConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
 
 
 def rows_to_dicts(cur, rows):
