@@ -318,32 +318,73 @@ def reset_password(token):
 @app.route("/diag")
 def diag():
     # TEMPORARY debugging route — remove once the Render login hang is solved.
-    # Prints each step to the logs with flush=True so lines still appear even
-    # if a later step hangs. Only exception TYPE names are logged, never values.
+    # Each step runs in a daemon thread with its own timeout, so the page
+    # always returns (worst case ~24s, under gunicorn's 30s worker limit).
+    import socket
+    import threading
+    import urllib.request
+    import urllib.error
+
     results = {}
     holder = {}
+    host = TURSO_DATABASE_URL.replace("libsql://", "").replace("https://", "").split("/")[0]
 
-    def step(name, fn):
+    def run_step(name, fn, timeout):
         start = time.time()
         print(f"[diag] starting: {name}", flush=True)
-        try:
-            fn()
-            elapsed = round(time.time() - start, 2)
-            print(f"[diag] done: {name} in {elapsed}s", flush=True)
-            results[name] = f"ok ({elapsed}s)"
-        except Exception as e:
-            elapsed = round(time.time() - start, 2)
-            print(f"[diag] FAILED: {name} after {elapsed}s: {type(e).__name__}", flush=True)
-            results[name] = f"failed ({type(e).__name__}, {elapsed}s)"
+        out = {}
 
-    step("connect", lambda: holder.__setitem__("conn", get_db()))
+        def target():
+            try:
+                out["value"] = fn()
+            except Exception as e:
+                out["error"] = type(e).__name__
+
+        t = threading.Thread(target=target, daemon=True)
+        t.start()
+        t.join(timeout)
+        elapsed = round(time.time() - start, 2)
+
+        if t.is_alive():
+            print(f"[diag] TIMEOUT: {name} still running after {timeout}s", flush=True)
+            results[name] = f"TIMEOUT (still running after {timeout}s)"
+        elif "error" in out:
+            print(f"[diag] FAILED: {name} after {elapsed}s: {out['error']}", flush=True)
+            results[name] = f"failed ({out['error']}, {elapsed}s)"
+        else:
+            detail = out.get("value")
+            print(f"[diag] done: {name} in {elapsed}s", flush=True)
+            results[name] = f"ok ({elapsed}s)" + (f" {detail}" if detail else "")
+
+    def dns_step():
+        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+        fams = sorted({("IPv6" if i[0] == socket.AF_INET6 else "IPv4") for i in infos})
+        return "families: " + ",".join(fams)
+
+    def https_step():
+        try:
+            with urllib.request.urlopen(f"https://{host}/health", timeout=4) as r:
+                return f"HTTP {r.status}"
+        except urllib.error.HTTPError as e:
+            return f"HTTP {e.code}"
+
+    def connect_step():
+        holder["conn"] = get_db()
+
+    def select_step():
+        rows = fetch_all(holder["conn"], "SELECT 1 AS one")
+        return f"rows={len(rows)}"
+
+    def hash_step():
+        h = generate_password_hash("diag-test-password")
+        check_password_hash(h, "diag-test-password")
+
+    run_step("dns_lookup", dns_step, 3)
+    run_step("plain_https_to_turso", https_step, 5)
+    run_step("libsql_connect", connect_step, 3)
     if "conn" in holder:
-        step("select_1", lambda: fetch_all(holder["conn"], "SELECT 1 AS one"))
-        step("param_query", lambda: fetch_one(
-            holder["conn"], "SELECT id FROM users WHERE username = ? LIMIT 1", ("__diag__",)))
-    step("hash_password", lambda: holder.__setitem__("h", generate_password_hash("diag-test-password")))
-    if "h" in holder:
-        step("check_password", lambda: check_password_hash(holder["h"], "diag-test-password"))
+        run_step("libsql_select_1", select_step, 8)
+    run_step("password_hash_and_check", hash_step, 5)
 
     return jsonify(results)
 
