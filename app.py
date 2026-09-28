@@ -67,13 +67,13 @@ def send_reset_email(to_email, reset_link):
 
     body = (
         "Hi,\n\n"
-        "We received a request to reset your Priority Planner password. "
+        "We received a request to reset your Agenndar password. "
         "Click the link below to choose a new one:\n\n"
         f"{reset_link}\n\n"
         "This link expires in 1 hour. If you didn't request this, you can safely ignore this email."
     )
     msg = MIMEText(body)
-    msg["Subject"] = "Reset your Priority Planner password"
+    msg["Subject"] = "Reset your Agenndar password"
     msg["From"] = sender_email
     msg["To"] = to_email
 

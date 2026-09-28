@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-  <title>Weekly Priority Planner & Execution Dashboard</title>
+  <title>Agenndar</title>
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script>
@@ -13,6 +13,13 @@
     }
   </script>
   <style>
+    @font-face {
+      font-family: 'Megrim';
+      src: url("{{ url_for('static', filename='fonts/Megrim.ttf') }}") format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
     :root {
       --bg: #efeeea;
       --card-bg: #ffffff;
@@ -215,11 +222,14 @@
     }
     .profile-hub:hover { background: var(--slot-hover); }
     .brand-title {
-      font-size: 1.05rem;
-      font-weight: 800;
+      font-family: 'Megrim', sans-serif;
+      font-size: 1.7rem;
+      font-weight: 400;
+      letter-spacing: 1px;
       color: var(--primary);
       text-align: right;
       line-height: 1.1;
+      -webkit-text-stroke: 0.03em currentColor;
     }
     .brand-user { font-size: 0.75rem; color: var(--metric-muted); font-weight: 500; }
     .avatar-badge {
@@ -662,7 +672,7 @@
     <div id="printHeader">
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:12px; border-bottom:2px solid #0f172a; padding-bottom:8px;">
         <div>
-          <div style="font-size:1.4rem; font-weight:800; color:#0f172a;">Priority Planner</div>
+          <div style="font-family:'Megrim', sans-serif; font-size:2rem; font-weight:400; letter-spacing:2px; color:#0f172a; -webkit-text-stroke:0.03em #0f172a;">Agenndar</div>
           <div id="printHeaderWeek" style="font-size:1rem; font-weight:600; color:#334155;"></div>
         </div>
         <div id="printHeaderGenerated" style="font-size:0.75rem; color:#64748b; text-align:right;"></div>
@@ -691,7 +701,7 @@
         
         <div class="profile-hub" id="profileHub" onclick="toggleProfileDropdown(event)">
           <div style="text-align: right;">
-            <div class="brand-title">Priority Planner</div>
+            <div class="brand-title">Agenndar</div>
             <div class="brand-user">{{ username }}</div>
           </div>
           <div class="avatar-badge">{{ username[:1].upper() }}</div>
@@ -1437,7 +1447,7 @@
       const element = document.getElementById('printableContent');
       const opt = {
         margin: [8, 8, 8, 8],
-        filename: `Priority_Planner_${document.getElementById('exportWeekTitle').innerText.replace(/\s+/g, '_')}.pdf`,
+        filename: `Agenndar_${document.getElementById('exportWeekTitle').innerText.replace(/\s+/g, '_')}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
