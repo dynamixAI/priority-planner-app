@@ -280,6 +280,18 @@
         <label class="day-box"><input type="checkbox" name="active_days[]" value="6" {% if '6' in active_days %}checked{% endif %}>Sat</label>
       </div>
 
+      <div class="section-title">Timetable Layout</div>
+      <div class="radio-row" style="flex-direction: column; gap: 0.6rem;">
+        <label>
+          <input type="radio" name="grid_orientation" value="time_rows" {% if grid_orientation != 'day_rows' %}checked{% endif %}>
+          Hours down the side, days across the top
+        </label>
+        <label>
+          <input type="radio" name="grid_orientation" value="day_rows" {% if grid_orientation == 'day_rows' %}checked{% endif %}>
+          Days down the side, hours across the top
+        </label>
+      </div>
+
       <div class="section-title">Overdue Behaviour</div>
       <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
         <label style="margin:0; font-size:0.85rem; font-weight:600; color:var(--text);">Flag a task as overdue after</label>

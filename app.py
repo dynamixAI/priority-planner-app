@@ -108,7 +108,8 @@ def init_db():
             is_permanently_locked INTEGER DEFAULT 0,
             overdue_threshold_days INTEGER DEFAULT 14,
             reset_token TEXT,
-            reset_token_expiry REAL DEFAULT 0
+            reset_token_expiry REAL DEFAULT 0,
+            grid_orientation TEXT DEFAULT 'time_rows'
         );
     """)
     # Guarded migrations for databases created before these columns existed —
@@ -118,6 +119,7 @@ def init_db():
         "ALTER TABLE users ADD COLUMN overdue_threshold_days INTEGER DEFAULT 14;",
         "ALTER TABLE users ADD COLUMN reset_token TEXT;",
         "ALTER TABLE users ADD COLUMN reset_token_expiry REAL DEFAULT 0;",
+        "ALTER TABLE users ADD COLUMN grid_orientation TEXT DEFAULT 'time_rows';",
     ]:
         try:
             conn.execute(stmt)
@@ -145,6 +147,7 @@ def init_db():
             date TEXT NOT NULL,
             time TEXT NOT NULL,
             duration TEXT NOT NULL,
+            duration_minutes INTEGER DEFAULT 60,
             priority_id INTEGER,
             status TEXT DEFAULT 'pending',
             origin_id INTEGER,
@@ -153,6 +156,30 @@ def init_db():
             FOREIGN KEY (origin_id) REFERENCES tasks(id)
         );
     """)
+    # One-time migration for databases created before duration_minutes existed:
+    # add the column (no default, so existing rows land as NULL), then backfill
+    # from the old text durations. The UPDATE only touches NULL rows, so it's
+    # safe — and necessary — to run on every startup.
+    try:
+        conn.execute("ALTER TABLE tasks ADD COLUMN duration_minutes INTEGER;")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        conn.execute("""
+            UPDATE tasks SET duration_minutes = CASE duration
+                WHEN '30 mins' THEN 30
+                WHEN '45 mins' THEN 45
+                WHEN '1 hour' THEN 60
+                WHEN '1.5 hours' THEN 90
+                WHEN '2 hours' THEN 120
+                ELSE 60
+            END
+            WHERE duration_minutes IS NULL;
+        """)
+        conn.commit()
+    except Exception:
+        pass
     conn.commit()
 
 
@@ -356,6 +383,10 @@ def priority_setup():
             overdue_threshold_days = 14
         overdue_threshold_days = max(1, min(365, overdue_threshold_days))
 
+        grid_orientation = request.form.get("grid_orientation", "time_rows")
+        if grid_orientation not in ("time_rows", "day_rows"):
+            grid_orientation = "time_rows"
+
         # Guard: a stale or empty form submission must never wipe existing tiers.
         if not any(label.strip() for label in labels):
             flash("No priority tiers were submitted — nothing was changed. Refresh the page and try again.", "error")
@@ -385,8 +416,8 @@ def priority_setup():
             conn.execute("UPDATE priorities SET is_active = 0 WHERE id = ? AND user_id = ?", (rid, user_id))
 
         conn.execute(
-            "UPDATE users SET week_start = ?, active_days = ?, overdue_threshold_days = ? WHERE id = ?",
-            (week_start, json.dumps(active_days), overdue_threshold_days, user_id)
+            "UPDATE users SET week_start = ?, active_days = ?, overdue_threshold_days = ?, grid_orientation = ? WHERE id = ?",
+            (week_start, json.dumps(active_days), overdue_threshold_days, grid_orientation, user_id)
         )
         conn.commit()
 
@@ -396,7 +427,7 @@ def priority_setup():
 
         return redirect(url_for("dashboard"))
 
-    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days FROM users WHERE id = ?", (user_id,))
+    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation FROM users WHERE id = ?", (user_id,))
     priorities = fetch_all(
         conn, "SELECT * FROM priorities WHERE user_id = ? AND is_active = 1 ORDER BY sort_order ASC", (user_id,)
     )
@@ -404,10 +435,12 @@ def priority_setup():
     week_start = user["week_start"] if user and user["week_start"] else "sunday"
     active_days = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
     overdue_threshold_days = user["overdue_threshold_days"] if user and user["overdue_threshold_days"] else 14
+    grid_orientation = user.get("grid_orientation") if user and user.get("grid_orientation") else "time_rows"
 
     return render_template(
         "priority_setup.html", priorities=priorities, theme=theme, week_start=week_start,
-        active_days=active_days, overdue_threshold_days=overdue_threshold_days
+        active_days=active_days, overdue_threshold_days=overdue_threshold_days,
+        grid_orientation=grid_orientation
     )
 
 
@@ -432,12 +465,13 @@ def dashboard():
     )
     conn.commit()
 
-    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days FROM users WHERE id = ?", (user_id,))
+    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation FROM users WHERE id = ?", (user_id,))
     priorities = fetch_all(
         conn, "SELECT * FROM priorities WHERE user_id = ? AND is_active = 1 ORDER BY sort_order ASC", (user_id,)
     )
     theme = user["theme"] if user and user["theme"] else "light"
     week_start_pref = user["week_start"] if user and user["week_start"] else "sunday"
+    grid_orientation = user.get("grid_orientation") if user and user.get("grid_orientation") else "time_rows"
     active_days_list = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
 
     today = datetime.today().date()
@@ -555,6 +589,7 @@ def dashboard():
         week_dates=visible_week_dates,
         week_dates_iso=week_dates_iso,
         week_start_pref=week_start_pref,
+        grid_orientation=grid_orientation,
         active_days=active_days_list,
         prev_week=prev_week,
         next_week=next_week,
@@ -786,11 +821,17 @@ def add_task():
     if len(time_val) == 4:
         time_val = "0" + time_val
 
+    try:
+        duration_minutes = int(data.get("duration_minutes", 60))
+    except (ValueError, TypeError):
+        duration_minutes = 60
+    duration_minutes = max(5, min(1440, duration_minutes))
+
     conn = get_db()
     conn.execute(
-        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status, origin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL)",
+        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL)",
         (session["user_id"], data.get("title"), data.get("detail"), data.get("location", ""),
-         data.get("date"), time_val, data.get("duration"), data.get("priority_id"))
+         data.get("date"), time_val, data.get("duration"), duration_minutes, data.get("priority_id"))
     )
     conn.commit()
     return jsonify({"status": "success"})
@@ -858,9 +899,9 @@ def reschedule_task():
         conn.execute("UPDATE tasks SET status = ? WHERE id = ? AND user_id = ?", (original_new_status, task_id, session["user_id"]))
 
     conn.execute(
-        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, priority_id, status, origin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
         (session["user_id"], task["title"], task["detail"], task["location"],
-         new_date, new_time, task["duration"], task["priority_id"], origin)
+         new_date, new_time, task["duration"], task["duration_minutes"] or 60, task["priority_id"], origin)
     )
     conn.commit()
     return jsonify({"status": "success", "result": result_label})
@@ -898,7 +939,7 @@ def reset_account():
     conn.execute("DELETE FROM tasks WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM priorities WHERE user_id = ?", (user_id,))
     conn.execute(
-        "UPDATE users SET week_start = 'sunday', active_days = ?, overdue_threshold_days = 14 WHERE id = ?",
+        "UPDATE users SET week_start = 'sunday', active_days = ?, overdue_threshold_days = 14, grid_orientation = 'time_rows' WHERE id = ?",
         (json.dumps(DEFAULT_ACTIVE_DAYS), user_id)
     )
     conn.commit()
@@ -927,6 +968,24 @@ def delete_account():
     conn.commit()
 
     session.clear()
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/task/detail", methods=["POST"])
+def update_task_detail():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    task_id = data.get("task_id")
+    new_detail = data.get("detail", "")
+
+    conn = get_db()
+    task = fetch_one(conn, "SELECT * FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
+    if not task:
+        return jsonify({"error": "Not found"}), 404
+
+    conn.execute("UPDATE tasks SET detail = ? WHERE id = ? AND user_id = ?", (new_detail, task_id, session["user_id"]))
+    conn.commit()
     return jsonify({"status": "success"})
 
 
