@@ -1,0 +1,23 @@
+{
+  "name": "Agenndar",
+  "short_name": "Agenndar",
+  "description": "The planner that works whether your week goes to plan or not.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#121214",
+  "theme_color": "#00d6e8",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

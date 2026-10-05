@@ -7,10 +7,11 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_from_directory
 from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
 from turso_http import TursoHTTPConnection
+from pywebpush import webpush, WebPushException
 
 load_dotenv()
 
@@ -27,6 +28,10 @@ csrf = CSRFProtect(app)
 
 TURSO_DATABASE_URL = os.environ["TURSO_DATABASE_URL"]
 TURSO_AUTH_TOKEN = os.environ["TURSO_AUTH_TOKEN"]
+
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY_FILE = os.environ.get("VAPID_PRIVATE_KEY_FILE", "vapid_private.pem")
+VAPID_CLAIMS = {"sub": "mailto:" + os.environ.get("SENDER_EMAIL", "admin@example.com")}
 
 DEFAULT_PRIORITIES = [
     {"label": "Urgent & Important", "color": "#ef4444"},
@@ -120,6 +125,7 @@ def init_db():
         "ALTER TABLE users ADD COLUMN reset_token TEXT;",
         "ALTER TABLE users ADD COLUMN reset_token_expiry REAL DEFAULT 0;",
         "ALTER TABLE users ADD COLUMN grid_orientation TEXT DEFAULT 'time_rows';",
+        "ALTER TABLE tasks ADD COLUMN reminder_sent INTEGER DEFAULT 0;",
     ]:
         try:
             conn.execute(stmt)
@@ -137,6 +143,18 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at REAL DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+    """)
+    conn.commit()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -340,6 +358,16 @@ def reset_password(token):
         return redirect(url_for("login"))
 
     return render_template("reset_password.html")
+
+
+@app.route("/service-worker.js")
+def service_worker():
+    # Served from the root path (not /static/) so its default scope covers
+    # the whole site, not just /static/ — otherwise it can never control
+    # pages like /dashboard, and anything waiting on it hangs forever.
+    response = send_from_directory("static", "service-worker.js")
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
 
 
 @app.route("/logout")
@@ -987,6 +1015,131 @@ def update_task_detail():
     conn.execute("UPDATE tasks SET detail = ? WHERE id = ? AND user_id = ?", (new_detail, task_id, session["user_id"]))
     conn.commit()
     return jsonify({"status": "success"})
+
+
+@app.route("/api/push/public-key")
+def push_public_key():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({"publicKey": VAPID_PUBLIC_KEY})
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def push_subscribe():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    endpoint = data.get("endpoint")
+    keys = data.get("keys", {})
+    p256dh = keys.get("p256dh")
+    auth = keys.get("auth")
+
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"error": "Invalid subscription"}), 400
+
+    conn = get_db()
+    existing = fetch_one(conn, "SELECT id FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+    if existing:
+        conn.execute(
+            "UPDATE push_subscriptions SET user_id = ?, p256dh = ?, auth = ? WHERE endpoint = ?",
+            (session["user_id"], p256dh, auth, endpoint)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)",
+            (session["user_id"], endpoint, p256dh, auth, time.time())
+        )
+    conn.commit()
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    endpoint = data.get("endpoint")
+    if not endpoint:
+        return jsonify({"error": "Missing endpoint"}), 400
+
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?",
+        (endpoint, session["user_id"])
+    )
+    conn.commit()
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/cron/send-reminders")
+def send_reminders():
+    secret = request.args.get("secret", "")
+    if secret != os.environ.get("CRON_SECRET", ""):
+        return jsonify({"error": "Forbidden"}), 403
+
+    conn = get_db()
+    now = datetime.now()
+    window_end = now + timedelta(minutes=15)
+
+    # Tasks starting within the next 15 minutes, still pending, not yet reminded.
+    due_soon = fetch_all(
+        conn,
+        "SELECT * FROM tasks WHERE status = 'pending' AND (reminder_sent = 0 OR reminder_sent IS NULL)"
+    )
+
+    sent_count = 0
+    checked_count = 0
+
+    for task in due_soon:
+        try:
+            task_dt = datetime.strptime(f"{task['date']} {task['time']}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        if not (now <= task_dt <= window_end):
+            continue
+
+        checked_count += 1
+        subs = fetch_all(conn, "SELECT * FROM push_subscriptions WHERE user_id = ?", (task["user_id"],))
+        if not subs:
+            # No device subscribed for this user — still mark as sent so we
+            # don't keep rechecking it every run for the rest of its window.
+            conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?", (task["id"],))
+            conn.commit()
+            continue
+
+        payload = json.dumps({
+            "title": "Agenndar",
+            "body": f"'{task['title']}' starts at {task['time']}",
+            "url": "/dashboard"
+        })
+
+        any_delivered = False
+        for sub in subs:
+            try:
+                webpush(
+                    subscription_info={
+                        "endpoint": sub["endpoint"],
+                        "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
+                    },
+                    data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY_FILE,
+                    vapid_claims=VAPID_CLAIMS.copy()
+                )
+                any_delivered = True
+            except WebPushException as e:
+                # A 404/410 means the browser revoked this subscription (e.g. the
+                # person cleared site data or uninstalled). Clean it up silently.
+                status = getattr(e.response, "status_code", None)
+                if status in (404, 410):
+                    conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (sub["endpoint"],))
+                    conn.commit()
+
+        conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?", (task["id"],))
+        conn.commit()
+        if any_delivered:
+            sent_count += 1
+
+    return jsonify({"checked": checked_count, "sent": sent_count})
 
 
 @app.route("/api/task/priority", methods=["POST"])
