@@ -108,6 +108,11 @@
     .btn:hover { background: var(--primary-hover); }
     .links { text-align: center; margin-top: 1rem; font-size: 0.8rem; }
     .links a { color: var(--primary); text-decoration: none; }
+
+    .consent-group { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.85rem; }
+    .consent-group input[type="checkbox"] { width: auto; margin-top: 0.15rem; flex-shrink: 0; }
+    .consent-group label { font-size: 0.78rem; font-weight: normal; color: var(--text); margin-bottom: 0; line-height: 1.4; }
+    .consent-group a { color: var(--primary); }
   </style>
 </head>
 <body>
@@ -149,6 +154,15 @@
           </button>
         </div>
       </div>
+      <div class="consent-group">
+        <input type="checkbox" id="agreeTerms" name="agree_terms" required>
+        <label for="agreeTerms">I agree to the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.</label>
+      </div>
+      <div class="consent-group">
+        <input type="checkbox" id="marketingOptIn" name="marketing_opt_in">
+        <label for="marketingOptIn">Send me occasional updates about Agenndar (optional).</label>
+      </div>
+
       <button type="submit" class="btn">Register & Continue</button>
     </form>
     <div class="links">Already registered? <a href="/login">Log In</a></div>

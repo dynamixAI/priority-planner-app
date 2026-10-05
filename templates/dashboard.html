@@ -546,6 +546,47 @@
     }
     .modal-close-btn:hover { background: var(--slot-hover); color: #ef4444; }
 
+    .install-banner {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      z-index: 1900;
+      display: none;
+      align-items: center;
+      gap: 0.85rem;
+      max-width: 380px;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .install-banner.show { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+    .install-banner-text { font-size: 0.82rem; line-height: 1.4; flex: 1; }
+    .install-banner-btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .install-banner-close {
+      background: transparent;
+      border: none;
+      color: var(--metric-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 0.2rem;
+    }
+
     .toast {
       position: fixed;
       bottom: 24px;
@@ -792,6 +833,9 @@
             <button type="button" class="dropdown-item" id="notifDropItem" onclick="togglePushNotifications()">
               <span id="notifDropText">🔔 Enable Notifications</span>
             </button>
+            <button type="button" class="dropdown-item" onclick="openInstallPromptManually()">
+              <span>📲 Install Agenndar</span>
+            </button>
             <a href="/settings" class="dropdown-item">
               <span>⚙️ Settings</span>
             </a>
@@ -875,6 +919,12 @@
          which has no meaningful row lines on paper — this is a separate,
          simpler structure so printed output gets real table borders. -->
   </main>
+
+  <div class="install-banner" id="installBanner">
+    <div class="install-banner-text" id="installBannerText"></div>
+    <button class="install-banner-btn" id="installBannerAction" style="display:none;"></button>
+    <button class="install-banner-close" onclick="dismissInstallBanner()" title="Dismiss">✕</button>
+  </div>
 
   <!-- Modal 1: Export Options -->
   <div class="modal-overlay" id="exportModal">
@@ -2285,6 +2335,85 @@
         await refreshMetricsAndTasks();
       }
     }
+
+    // --- Install prompt ---
+    let deferredInstallPrompt = null;
+    const isStandaloneApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    function hideInstallBanner() {
+      document.getElementById('installBanner').classList.remove('show');
+    }
+
+    function dismissInstallBanner() {
+      hideInstallBanner();
+      // Session-only — reappears on the next visit, unless the app gets installed first.
+      sessionStorage.setItem('installBannerDismissed', 'true');
+    }
+
+    function showInstallBanner() {
+      if (isStandaloneApp) return;
+      if (sessionStorage.getItem('installBannerDismissed') === 'true') return;
+
+      const banner = document.getElementById('installBanner');
+      const text = document.getElementById('installBannerText');
+      const btn = document.getElementById('installBannerAction');
+
+      if (deferredInstallPrompt) {
+        text.innerText = 'Install Agenndar on this device for quick access and notifications.';
+        btn.style.display = 'inline-block';
+        btn.innerText = 'Install';
+        btn.onclick = triggerInstallPrompt;
+        banner.classList.add('show');
+      } else if (isIosDevice) {
+        text.innerText = 'Install Agenndar: tap the Share icon, then "Add to Home Screen".';
+        btn.style.display = 'none';
+        banner.classList.add('show');
+      }
+    }
+
+    async function triggerInstallPrompt() {
+      if (!deferredInstallPrompt) return;
+      hideInstallBanner();
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      if (outcome === 'accepted') {
+        showToast('🎉 Agenndar installed');
+      }
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      showInstallBanner();
+    });
+
+    window.addEventListener('appinstalled', () => {
+      hideInstallBanner();
+      deferredInstallPrompt = null;
+    });
+
+    // Manual trigger from the profile dropdown — installs directly rather
+    // than showing the floating banner first, since clicking an explicit
+    // "Install" menu item is already the user's confirmed intent.
+    function openInstallPromptManually() {
+      document.getElementById('profileDropdown').classList.remove('open');
+
+      if (deferredInstallPrompt) {
+        triggerInstallPrompt();
+      } else if (isIosDevice) {
+        showInstallBanner();
+      } else {
+        showToast("This browser doesn't support an install prompt — check your browser's menu for an install option.");
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (isIosDevice && !deferredInstallPrompt) {
+        showInstallBanner();
+      }
+    });
   </script>
 </body>
 </html>

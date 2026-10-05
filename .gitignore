@@ -6,3 +6,4 @@ venv/
 .env
 planner.db
 vapid_private.pem
+marketing_opt_in.csv

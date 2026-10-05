@@ -126,6 +126,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN reset_token_expiry REAL DEFAULT 0;",
         "ALTER TABLE users ADD COLUMN grid_orientation TEXT DEFAULT 'time_rows';",
         "ALTER TABLE tasks ADD COLUMN reminder_sent INTEGER DEFAULT 0;",
+        "ALTER TABLE users ADD COLUMN terms_accepted_at REAL DEFAULT 0;",
+        "ALTER TABLE users ADD COLUMN marketing_opt_in INTEGER DEFAULT 0;",
     ]:
         try:
             conn.execute(stmt)
@@ -218,12 +220,17 @@ def register():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
+        agree_terms = request.form.get("agree_terms")
+        marketing_opt_in = 1 if request.form.get("marketing_opt_in") else 0
 
         if not username or not email or not password or not confirm_password:
             flash("All fields are required.", "error")
             return redirect(url_for("register"))
         if password != confirm_password:
             flash("Passwords do not match.", "error")
+            return redirect(url_for("register"))
+        if not agree_terms:
+            flash("You must agree to the Terms of Service and Privacy Policy to create an account.", "error")
             return redirect(url_for("register"))
 
         conn = get_db()
@@ -234,8 +241,8 @@ def register():
 
         hashed = generate_password_hash(password)
         conn.execute(
-            "INSERT INTO users (username, email, password_hash, theme, week_start, active_days, failed_attempts, lock_until, is_permanently_locked) VALUES (?, ?, ?, 'light', 'sunday', ?, 0, 0, 0)",
-            (username, email, hashed, json.dumps(DEFAULT_ACTIVE_DAYS))
+            "INSERT INTO users (username, email, password_hash, theme, week_start, active_days, failed_attempts, lock_until, is_permanently_locked, terms_accepted_at, marketing_opt_in) VALUES (?, ?, ?, 'light', 'sunday', ?, 0, 0, 0, ?, ?)",
+            (username, email, hashed, json.dumps(DEFAULT_ACTIVE_DAYS), time.time(), marketing_opt_in)
         )
         conn.commit()
 
@@ -368,6 +375,16 @@ def service_worker():
     response = send_from_directory("static", "service-worker.js")
     response.headers["Service-Worker-Allowed"] = "/"
     return response
+
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html", updated_date=datetime.today().strftime("%d %B %Y"))
+
+
+@app.route("/terms")
+def terms():
+    return render_template("terms.html", updated_date=datetime.today().strftime("%d %B %Y"))
 
 
 @app.route("/logout")
@@ -992,6 +1009,7 @@ def delete_account():
 
     conn.execute("DELETE FROM tasks WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM priorities WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM push_subscriptions WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
 

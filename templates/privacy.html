@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
+  <title>Privacy Policy | Agenndar</title>
+  <script>
+    const cachedTheme = localStorage.getItem('planner-theme');
+    document.documentElement.setAttribute('data-theme', cachedTheme || 'dark');
+  </script>
+  <style>
+    @font-face {
+      font-family: 'Megrim';
+      src: url("{{ url_for('static', filename='fonts/Megrim.ttf') }}") format('truetype');
+      font-weight: 400; font-style: normal; font-display: swap;
+    }
+    :root {
+      --bg: #efeeea; --card-bg: #ffffff; --text: #121214; --border: #dcdad5;
+      --subtext: #6b6f76; --primary: #0891a3; --primary-hover: #076e7d;
+    }
+    [data-theme="dark"] {
+      --bg: #121214; --card-bg: #1c1c1f; --text: #f2f1ee; --border: #2c2c30;
+      --subtext: #9a9da3; --primary: #00d6e8; --primary-hover: #00b8c9;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text); margin: 0; padding: 2rem 1.25rem;
+    }
+    .doc { max-width: 680px; margin: 0 auto; }
+    .brand {
+      font-family: 'Megrim', sans-serif; font-size: 1.8rem; color: var(--primary);
+      -webkit-text-stroke: 0.03em currentColor; margin-bottom: 0.25rem;
+    }
+    .updated { color: var(--subtext); font-size: 0.85rem; margin-bottom: 2rem; }
+    h2 { color: var(--primary); font-size: 1.1rem; margin-top: 2rem; }
+    p, li { line-height: 1.6; font-size: 0.92rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.65rem; text-align: left; vertical-align: top; }
+    th { background: var(--card-bg); color: var(--subtext); }
+    a { color: var(--primary); }
+    .back-link { display: inline-block; margin-top: 2rem; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="doc">
+    <div class="brand">Agenndar</div>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: {{ updated_date }}</p>
+
+    <p><strong>Who we are.</strong> Agenndar is operated by Pius Ajamma, based in Wigan, United Kingdom. For any privacy question, contact <a href="mailto:ajammapius@gmail.com">ajammapius@gmail.com</a>.</p>
+
+    <p><strong>Minimum age.</strong> You must be 18 or older to create an Agenndar account.</p>
+
+    <h2>What we collect, and why</h2>
+    <table>
+      <tr><th>Data</th><th>Why we collect it</th><th>Lawful basis</th></tr>
+      <tr><td>Username, email, password (stored as a one-way hash, never in plain text)</td><td>To create and secure your account</td><td>Performance of a contract with you</td></tr>
+      <tr><td>Your tasks — titles, times, details, locations</td><td>This is the core service you're using Agenndar for</td><td>Performance of a contract with you</td></tr>
+      <tr><td>Push notification subscription (a device identifier and encryption keys, not your task content)</td><td>To send you task reminders, if you turn this on</td><td>Consent — you opt in via your browser's own permission prompt, and can withdraw it at any time from the Settings menu</td></tr>
+      <tr><td>IP address and basic request logs</td><td>Security — detecting abuse, such as repeated failed logins</td><td>Legitimate interest</td></tr>
+      <tr><td>Your email address, if you opt in separately to receive updates</td><td>To send occasional product updates</td><td>Consent — you can withdraw this at any time</td></tr>
+    </table>
+
+    <h2>Who we share it with</h2>
+    <p>We never sell your data. A small number of specialist companies process it on our behalf, strictly to run the service:</p>
+    <ul>
+      <li><strong>Turso</strong> — stores your account and task data.</li>
+      <li><strong>Render</strong> — hosts the Agenndar application itself.</li>
+      <li><strong>Brevo</strong> — sends password-reset emails.</li>
+      <li>When you enable push notifications, the message itself passes through your browser's own push service — Google's for Chrome/Android, Apple's for Safari/iPhone. This is how the web push standard works for every website that uses it, not something we choose, and we have no visibility into that traffic beyond handing it over for delivery.</li>
+    </ul>
+
+    <h2>Where your data is processed</h2>
+    <p>Some of the providers above may process data outside the UK. Where that happens, we rely on their own standard contractual safeguards for international transfers.</p>
+
+    <h2>How long we keep it</h2>
+    <p>Your account and task data is kept for as long as your account exists. If you delete your account, everything is permanently removed immediately — we don't keep a backup copy afterward.</p>
+
+    <h2>Your rights</h2>
+    <p>Under UK GDPR, you have the right to:</p>
+    <ul>
+      <li>Be informed about how your data is used (this document).</li>
+      <li>Access the data we hold on you.</li>
+      <li>Have inaccurate data corrected.</li>
+      <li>Have your data erased — you can also do this yourself, instantly, via Settings → Delete Account.</li>
+      <li>Restrict how we process your data.</li>
+      <li>Receive your data in a portable format.</li>
+      <li>Object to processing based on legitimate interest.</li>
+      <li>Not be subject to solely automated decisions with legal effect — we don't do this.</li>
+    </ul>
+    <p>To exercise any of these, email <a href="mailto:ajammapius@gmail.com">ajammapius@gmail.com</a>. We'll respond within one calendar month. If you're unhappy with our response, you can complain to the UK Information Commissioner's Office at <a href="https://ico.org.uk" target="_blank" rel="noopener">ico.org.uk</a>.</p>
+
+    <h2>Security</h2>
+    <p>Passwords are never stored in plain text. All connections to Agenndar use HTTPS encryption.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>We'll update the date at the top if this changes, and for significant changes, we'll let you know directly.</p>
+
+    <a href="/" class="back-link">← Back to Agenndar</a>
+  </div>
+</body>
+</html>
