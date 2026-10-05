@@ -4,3 +4,4 @@ gunicorn
 python-dotenv
 libsql
 Flask-WTF
+pywebpush
