@@ -38,14 +38,17 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
+      padding: 1.25rem;
+      box-sizing: border-box;
       transition: background 0.15s ease, color 0.15s ease;
     }
     .card {
       background: var(--card-bg);
       padding: 2.25rem;
       border-radius: 12px;
-      width: 380px;
+      width: 100%;
+      max-width: 380px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.2);
       border: 1px solid var(--border);
     }
@@ -113,6 +116,14 @@
     .consent-group input[type="checkbox"] { width: auto; margin-top: 0.15rem; flex-shrink: 0; }
     .consent-group label { font-size: 0.78rem; font-weight: normal; color: var(--text); margin-bottom: 0; line-height: 1.4; }
     .consent-group a { color: var(--primary); }
+      @media (max-width: 420px) {
+      .card { padding: 1.5rem; }
+      h2 { font-size: 1.55rem; }
+      label { font-size: 0.82rem; }
+      input { padding: 0.8rem; font-size: 0.95rem; }
+      .btn { padding: 0.9rem; font-size: 1rem; }
+      .links { font-size: 0.88rem; }
+    }
   </style>
 </head>
 <body>
