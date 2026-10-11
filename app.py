@@ -3,6 +3,7 @@ import json
 import time
 import secrets
 import hashlib
+import hmac
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
@@ -42,6 +43,19 @@ DEFAULT_PRIORITIES = [
 ]
 
 TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
+
+# Failed-login lockout: after 5 wrong passwords in a row, each further
+# failure locks the account for longer — but never permanently, so a typo
+# streak (or a stranger guessing your username) can't lock you out for good.
+# Indexed by failure count; anything past the end uses the last value.
+LOCK_SECONDS = {5: 120, 6: 300, 7: 900}
+MAX_LOCK_SECONDS = 3600
+
+
+def lock_seconds_for(attempts):
+    if attempts < 5:
+        return 0
+    return LOCK_SECONDS.get(attempts, MAX_LOCK_SECONDS)
 
 DEFAULT_TIMEZONE = "Europe/London"
 DEFAULT_TIME_FORMAT = "24h"
@@ -322,42 +336,40 @@ def login():
 
         conn = get_db()
         user = fetch_one(conn, "SELECT * FROM users WHERE username = ? OR email = ?", (username, username.lower()))
+        # Same message for an unknown username and a wrong password, so the
+        # login form can't be used to discover which accounts exist.
         if not user:
-            flash("Invalid credentials.", "error")
+            flash("Invalid username or password.", "error")
             return redirect(url_for("login"))
 
-        if user["is_permanently_locked"]:
-            flash("Account locked due to excessive failed attempts.", "error")
-            return redirect(url_for("login"))
-
+        # Locks are always temporary. The old permanent-lock flag is no
+        # longer checked; it's cleared on the next successful login.
         if user["lock_until"] and now < user["lock_until"]:
             mins_left = int((user["lock_until"] - now) // 60) + 1
-            flash(f"Account locked. Try again in {mins_left} min(s).", "error")
+            flash(f"Too many attempts. Try again in {mins_left} min(s).", "error")
             return redirect(url_for("login"))
 
         if check_password_hash(user["password_hash"], password):
-            conn.execute("UPDATE users SET failed_attempts = 0, lock_until = 0 WHERE id = ?", (user["id"],))
+            conn.execute(
+                "UPDATE users SET failed_attempts = 0, lock_until = 0, "
+                "is_permanently_locked = 0 WHERE id = ?",
+                (user["id"],)
+            )
             conn.commit()
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             return redirect(url_for("dashboard"))
         else:
-            attempts = user["failed_attempts"] + 1
-            lock_until = 0
-            perm_lock = 0
-            if attempts >= 9:
-                perm_lock = 1
-            elif attempts >= 8:
-                lock_until = now + 300
-            elif attempts >= 5:
-                lock_until = now + 120
+            attempts = (user["failed_attempts"] or 0) + 1
+            wait = lock_seconds_for(attempts)
+            lock_until = now + wait if wait else 0
 
             conn.execute(
-                "UPDATE users SET failed_attempts = ?, lock_until = ?, is_permanently_locked = ? WHERE id = ?",
-                (attempts, lock_until, perm_lock, user["id"])
+                "UPDATE users SET failed_attempts = ?, lock_until = ? WHERE id = ?",
+                (attempts, lock_until, user["id"])
             )
             conn.commit()
-            flash("Invalid password.", "error")
+            flash("Invalid username or password.", "error")
             return redirect(url_for("login"))
 
     return render_template("login.html")
@@ -384,7 +396,11 @@ def forgot_password():
             try:
                 send_reset_email(user["email"], reset_link)
             except Exception:
-                pass  # never reveal whether sending succeeded — same message either way
+                # The user still sees the same message either way (so this
+                # page can't reveal which emails are registered), but the
+                # real error goes to the server logs — visible in Render's
+                # Logs tab — instead of disappearing silently.
+                app.logger.exception("Password reset email failed to send")
 
         flash("If that email is on file, reset instructions have been sent.", "info")
         return redirect(url_for("login"))
@@ -1199,8 +1215,12 @@ def push_unsubscribe():
 
 @app.route("/api/cron/send-reminders")
 def send_reminders():
+    # Refuse outright if no secret is configured — otherwise an empty
+    # ?secret= would match an empty setting and anyone could trigger this.
+    # compare_digest avoids leaking the secret through response timing.
+    expected = os.environ.get("CRON_SECRET", "")
     secret = request.args.get("secret", "")
-    if secret != os.environ.get("CRON_SECRET", ""):
+    if not expected or not hmac.compare_digest(secret, expected):
         return jsonify({"error": "Forbidden"}), 403
 
     conn = get_db()
