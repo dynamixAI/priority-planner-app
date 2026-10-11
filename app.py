@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import secrets
@@ -149,6 +150,133 @@ def format_time(hhmm, time_format):
         return datetime.strptime(hhmm, "%H:%M").strftime("%I:%M %p").lstrip("0")
     except ValueError:
         return hhmm
+
+
+MAX_TITLE_LEN = 200
+MAX_TEXT_LEN = 2000
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
+
+
+def clean_date(value):
+    """'2026-10-11' if valid, else None."""
+    if not isinstance(value, str) or not _DATE_RE.match(value):
+        return None
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return value
+
+
+def clean_time(value):
+    """'09:05' (zero-padded) if a valid time, else None."""
+    if not isinstance(value, str) or not _TIME_RE.match(value):
+        return None
+    h, m = (int(x) for x in value.split(":"))
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return f"{h:02d}:{m:02d}"
+
+
+def clean_text(value, limit):
+    return value.strip()[:limit] if isinstance(value, str) else ""
+
+
+def compute_metrics(conn, user_id, now_dt, overdue_threshold_days):
+    """Every dashboard number and the BHI score, worked out by the
+    database (counts) rather than by loading every task into Python.
+    Used by both the dashboard page and the live /api/metrics refresh,
+    so the scoring rules live in exactly one place."""
+    today_str = now_dt.strftime("%Y-%m-%d")
+    now_hhmm = now_dt.strftime("%H:%M")
+    row = fetch_one(conn, """
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS done,
+          SUM(CASE WHEN status = 'completed'
+                    AND COALESCE(completed_late, 0) = 1
+                   THEN 1 ELSE 0 END) AS done_late,
+          SUM(CASE WHEN status = 'rescheduled' THEN 1 ELSE 0 END) AS pushed,
+          SUM(CASE WHEN status = 'missed' THEN 1 ELSE 0 END) AS missed,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS undone,
+          SUM(CASE WHEN status = 'replanned' THEN 1 ELSE 0 END) AS replanned,
+          SUM(CASE WHEN status = 'pending'
+                    AND (date > ? OR (date = ? AND time > ?))
+                   THEN 1 ELSE 0 END) AS not_yet_due
+        FROM tasks WHERE user_id = ?
+    """, (today_str, today_str, now_hhmm, user_id)) or {}
+    n = {k: (v or 0) for k, v in row.items()}
+
+    # Overdue-threshold penalty: a still-open task, chronically outstanding
+    # since its FIRST scheduled date (even across pushes/replans), costs a
+    # fixed 0.3 points once it crosses the user's own configured day count.
+    cutoff = (now_dt.date() - timedelta(days=overdue_threshold_days)).strftime("%Y-%m-%d")
+    overdue = fetch_one(conn, """
+        SELECT COUNT(*) AS n FROM tasks t
+        LEFT JOIN tasks o ON o.id = t.origin_id AND o.user_id = t.user_id
+        WHERE t.user_id = ? AND t.status = 'pending'
+          AND COALESCE(o.date, t.date) <= ?
+    """, (user_id, cutoff))
+    overdue_flagged = (overdue or {}).get("n") or 0
+
+    # Free replans and not-yet-due tasks aren't judged at all. They still
+    # count toward "Total Logged", which tracks every task ever entered.
+    bhi_total = n["total"] - n["replanned"] - n["not_yet_due"]
+    if bhi_total > 0:
+        score_raw = (
+            ((n["done"] - n["done_late"]) * 1.0)
+            + (n["done_late"] * LATE_DONE_WEIGHT) + (n["pushed"] * 0.4)
+            - (n["missed"] * 0.6) - (overdue_flagged * 0.3)
+        ) / bhi_total * 100
+        bhi_score = max(0, min(100, round(score_raw, 1)))
+    else:
+        bhi_score = 100.0
+
+    if bhi_score >= 80:
+        bhi_tier, bhi_color = "Disciplined", "#16a34a"
+    elif bhi_score >= 50:
+        bhi_tier, bhi_color = "Drifting", "#eab308"
+    else:
+        bhi_tier, bhi_color = "Avoidance", "#ef4444"
+
+    return {
+        "total_logged": n["total"],
+        "total": n["total"],
+        "done": n["done"],
+        "done_late": n["done_late"],
+        "undone": n["undone"],
+        "pushed": n["pushed"],
+        "missed": n["missed"],
+        "bhi_score": bhi_score,
+        "bhi_tier": bhi_tier,
+        "bhi_color": bhi_color,
+    }
+
+
+def fetch_attention_tasks(conn, user_id, today_str):
+    """Just the tasks the catch-up banner needs: today's (or earlier)
+    tasks still open, plus missed tasks that haven't been rescheduled
+    or dismissed. The browser no longer needs every task ever made."""
+    open_tasks = fetch_all(conn, """
+        SELECT * FROM tasks
+        WHERE user_id = ? AND status = 'pending' AND date <= ?
+        ORDER BY date ASC, time ASC
+    """, (user_id, today_str))
+    missed = fetch_all(conn, """
+        SELECT t.* FROM tasks t
+        WHERE t.user_id = ? AND t.status = 'missed'
+          AND COALESCE(t.followup_dismissed, 0) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM tasks x
+            WHERE x.user_id = t.user_id
+              AND x.origin_id = COALESCE(t.origin_id, t.id)
+              AND x.id > t.id
+          )
+        ORDER BY t.date ASC, t.time ASC
+        LIMIT 50
+    """, (user_id,))
+    return open_tasks + missed
 
 
 def seed_default_priorities(conn, user_id):
@@ -654,75 +782,9 @@ def dashboard():
     else:
         tasks = []
 
-    all_user_tasks = fetch_all(conn, "SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,))
-    total_tasks = len(all_user_tasks)
-    done_tasks = sum(1 for t in all_user_tasks if t["status"] == "completed")
-    late_done_tasks = sum(
-        1 for t in all_user_tasks
-        if t["status"] == "completed" and t.get("completed_late")
-    )
-    pushed_tasks = sum(1 for t in all_user_tasks if t["status"] == "rescheduled")
-    missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
-    undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
-    replanned_tasks = sum(1 for t in all_user_tasks if t["status"] == "replanned")
-
-    def is_not_yet_due(t):
-        # A pending task whose scheduled time hasn't arrived yet shouldn't be
-        # judged at all — you can't have missed or completed something before
-        # its own moment has come. It only enters the score once it's overdue.
-        if t["status"] != "pending":
-            return False
-        try:
-            scheduled_dt = datetime.strptime(f"{t['date']} {t['time']}", "%Y-%m-%d %H:%M")
-        except ValueError:
-            return False
-        return scheduled_dt > now_dt
-
-    not_yet_due_tasks = sum(1 for t in all_user_tasks if is_not_yet_due(t))
-
-    # Exclude 'replanned' rows (free moves) and not-yet-due pending tasks from
-    # the BHI denominator. They still count toward total_tasks / "Total Logged"
-    # above, since that tracks every row ever entered regardless of timing.
-    bhi_total = total_tasks - replanned_tasks - not_yet_due_tasks
-
-    # Overdue-threshold penalty: a still-open task, chronically outstanding
-    # since its FIRST scheduled date (even across pushes/replans), costs a
-    # fixed 0.3 points once it crosses the user's own configured day count.
-    task_by_id = {t["id"]: t for t in all_user_tasks}
     overdue_threshold_days = user["overdue_threshold_days"] if user and user["overdue_threshold_days"] else 14
-
-    def get_origin_date(t):
-        if t["origin_id"] and t["origin_id"] in task_by_id:
-            return task_by_id[t["origin_id"]]["date"]
-        return t["date"]
-
-    def is_flagged_overdue(t):
-        if t["status"] != "pending":
-            return False
-        try:
-            origin_date = datetime.strptime(get_origin_date(t), "%Y-%m-%d").date()
-        except ValueError:
-            return False
-        return (today - origin_date).days >= overdue_threshold_days
-
-    overdue_flagged_tasks = sum(1 for t in all_user_tasks if is_flagged_overdue(t))
-
-    if bhi_total > 0:
-        score_raw = (
-            ((done_tasks - late_done_tasks) * 1.0)
-            + (late_done_tasks * LATE_DONE_WEIGHT) + (pushed_tasks * 0.4)
-            - (missed_tasks * 0.6) - (overdue_flagged_tasks * 0.3)
-        ) / bhi_total * 100
-        bhi_score = max(0, min(100, round(score_raw, 1)))
-    else:
-        bhi_score = 100.0
-
-    if bhi_score >= 80:
-        bhi_tier, bhi_color = "Disciplined", "#16a34a"
-    elif bhi_score >= 50:
-        bhi_tier, bhi_color = "Drifting", "#eab308"
-    else:
-        bhi_tier, bhi_color = "Avoidance", "#ef4444"
+    metrics = compute_metrics(conn, user_id, now_dt, overdue_threshold_days)
+    attention_tasks = fetch_attention_tasks(conn, user_id, today_str)
 
     week_dates_iso = [d.strftime("%Y-%m-%d") for d in visible_week_dates]
 
@@ -732,7 +794,7 @@ def dashboard():
         theme=theme,
         priorities=priorities,
         tasks=tasks,
-        all_tasks=all_user_tasks,
+        attention_tasks=attention_tasks,
         week_dates=visible_week_dates,
         week_dates_iso=week_dates_iso,
         week_start_pref=week_start_pref,
@@ -744,18 +806,7 @@ def dashboard():
         next_week=next_week,
         cur_week_str=cur_week_str,
         time_slots=TIME_SLOTS,
-        metrics={
-            "total_logged": total_tasks,
-            "total": total_tasks,
-            "done": done_tasks,
-            "done_late": late_done_tasks,
-            "undone": undone_tasks,
-            "pushed": pushed_tasks,
-            "missed": missed_tasks,
-            "bhi_score": bhi_score,
-            "bhi_tier": bhi_tier,
-            "bhi_color": bhi_color
-        }
+        metrics=metrics
     )
 
 
@@ -777,19 +828,28 @@ def trends():
     if days not in (7, 14, 30, 90):
         days = 14
 
-    all_user_tasks = fetch_all(conn, "SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,))
     today = user_now(user_tz).date()
+    first_day = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    # Only the chart's own date range is loaded, not every task ever made.
+    range_tasks = fetch_all(
+        conn,
+        "SELECT date, status FROM tasks WHERE user_id = ? AND date BETWEEN ? AND ?",
+        (user_id, first_day, today.strftime("%Y-%m-%d"))
+    )
 
     chart_labels, chart_completed, chart_pushed, chart_missed, chart_rate = [], [], [], [], []
     for i in range(days - 1, -1, -1):
-        day_cursor = (today - timedelta(days=i)).strftime("%Y-%m-%d")
-        chart_labels.append((today - timedelta(days=i)).strftime("%d %b"))
-        day_tasks = [t for t in all_user_tasks if t["date"] == day_cursor]
+        day = today - timedelta(days=i)
+        day_cursor = day.strftime("%Y-%m-%d")
+        chart_labels.append(day.strftime("%d %b"))
+        day_tasks = [t for t in range_tasks if t["date"] == day_cursor]
         c_cnt = sum(1 for t in day_tasks if t["status"] == "completed")
         p_cnt = sum(1 for t in day_tasks if t["status"] == "rescheduled")
         m_cnt = sum(1 for t in day_tasks if t["status"] == "missed")
-        t_cnt = len(day_tasks)
-        rate = round((c_cnt / t_cnt * 100), 1) if t_cnt > 0 else 0
+        # Same rule as the BHI: free replans and still-open tasks aren't
+        # judged, so the rate is done out of done + pushed + missed.
+        judged = c_cnt + p_cnt + m_cnt
+        rate = round((c_cnt / judged * 100), 1) if judged > 0 else 0
         chart_completed.append(c_cnt)
         chart_pushed.append(p_cnt)
         chart_missed.append(m_cnt)
@@ -882,101 +942,57 @@ def api_metrics():
 
     user = fetch_one(conn, "SELECT overdue_threshold_days, timezone FROM users WHERE id = ?", (user_id,))
     now_dt = user_now(clean_timezone(user.get("timezone") if user else ""))
-    today = now_dt.date()
+    today_str = now_dt.strftime("%Y-%m-%d")
 
-    today_str = today.strftime("%Y-%m-%d")
     conn.execute(
         "UPDATE tasks SET status = 'missed' WHERE user_id = ? AND status = 'pending' AND date < ?",
         (user_id, today_str)
     )
     conn.commit()
 
-    all_user_tasks = fetch_all(conn, "SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,))
-
-    total_tasks = len(all_user_tasks)
-    done_tasks = sum(1 for t in all_user_tasks if t["status"] == "completed")
-    late_done_tasks = sum(
-        1 for t in all_user_tasks
-        if t["status"] == "completed" and t.get("completed_late")
-    )
-    pushed_tasks = sum(1 for t in all_user_tasks if t["status"] == "rescheduled")
-    missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
-    undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
-    replanned_tasks = sum(1 for t in all_user_tasks if t["status"] == "replanned")
-
-    def is_not_yet_due(t):
-        if t["status"] != "pending":
-            return False
-        try:
-            scheduled_dt = datetime.strptime(f"{t['date']} {t['time']}", "%Y-%m-%d %H:%M")
-        except ValueError:
-            return False
-        return scheduled_dt > now_dt
-
-    not_yet_due_tasks = sum(1 for t in all_user_tasks if is_not_yet_due(t))
-    bhi_total = total_tasks - replanned_tasks - not_yet_due_tasks
-
-    task_by_id = {t["id"]: t for t in all_user_tasks}
     overdue_threshold_days = user["overdue_threshold_days"] if user and user["overdue_threshold_days"] else 14
-
-    def get_origin_date(t):
-        if t["origin_id"] and t["origin_id"] in task_by_id:
-            return task_by_id[t["origin_id"]]["date"]
-        return t["date"]
-
-    def is_flagged_overdue(t):
-        if t["status"] != "pending":
-            return False
-        try:
-            origin_date = datetime.strptime(get_origin_date(t), "%Y-%m-%d").date()
-        except ValueError:
-            return False
-        return (today - origin_date).days >= overdue_threshold_days
-
-    overdue_flagged_tasks = sum(1 for t in all_user_tasks if is_flagged_overdue(t))
-
-    if bhi_total > 0:
-        score_raw = (
-            ((done_tasks - late_done_tasks) * 1.0)
-            + (late_done_tasks * LATE_DONE_WEIGHT) + (pushed_tasks * 0.4)
-            - (missed_tasks * 0.6) - (overdue_flagged_tasks * 0.3)
-        ) / bhi_total * 100
-        bhi_score = max(0, min(100, round(score_raw, 1)))
-    else:
-        bhi_score = 100.0
-
-    if bhi_score >= 80:
-        bhi_tier, bhi_color = "Disciplined", "#16a34a"
-    elif bhi_score >= 50:
-        bhi_tier, bhi_color = "Drifting", "#eab308"
-    else:
-        bhi_tier, bhi_color = "Avoidance", "#ef4444"
-
     return jsonify({
-        "all_tasks": all_user_tasks,
-        "metrics": {
-            "total_logged": total_tasks,
-            "total": total_tasks,
-            "done": done_tasks,
-            "done_late": late_done_tasks,
-            "undone": undone_tasks,
-            "pushed": pushed_tasks,
-            "missed": missed_tasks,
-            "bhi_score": bhi_score,
-            "bhi_tier": bhi_tier,
-            "bhi_color": bhi_color
-        }
+        "metrics": compute_metrics(conn, user_id, now_dt, overdue_threshold_days),
+        "attention_tasks": fetch_attention_tasks(conn, user_id, today_str),
     })
+
+
+@app.route("/api/tasks/list")
+def api_tasks_list():
+    """Tasks of one status (optionally one date), loaded only when a list
+    is opened or a time is checked for overlaps, instead of on every load."""
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    status = request.args.get("status", "")
+    if status not in ("completed", "pending", "rescheduled", "missed"):
+        return jsonify({"error": "Unknown status"}), 400
+    sql = "SELECT * FROM tasks WHERE user_id = ? AND status = ?"
+    params = [session["user_id"], status]
+    date = clean_date(request.args.get("date"))
+    if date:
+        sql += " AND date = ?"
+        params.append(date)
+    sql += " ORDER BY date ASC, time ASC"
+    return jsonify({"tasks": fetch_all(get_db(), sql, params)})
 
 
 @app.route("/api/task/add", methods=["POST"])
 def add_task():
     if "user_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
-    data = request.get_json()
-    time_val = data.get("time", "09:00")
-    if len(time_val) == 4:
-        time_val = "0" + time_val
+    data = request.get_json(silent=True) or {}
+
+    # Check everything before saving: a bad request gets a clear message
+    # instead of crashing the server or storing a broken task.
+    title = clean_text(data.get("title"), MAX_TITLE_LEN)
+    date = clean_date(data.get("date"))
+    time_val = clean_time(data.get("time") or "09:00")
+    if not title:
+        return jsonify({"error": "Please enter a task title."}), 400
+    if not date:
+        return jsonify({"error": "Please choose a valid date."}), 400
+    if not time_val:
+        return jsonify({"error": "Please choose a valid start time."}), 400
 
     try:
         duration_minutes = int(data.get("duration_minutes", 60))
@@ -985,10 +1001,18 @@ def add_task():
     duration_minutes = max(5, min(1440, duration_minutes))
 
     conn = get_db()
+    priority_id = data.get("priority_id")
+    if priority_id is not None and not fetch_one(
+        conn, "SELECT id FROM priorities WHERE id = ? AND user_id = ? AND is_active = 1",
+        (priority_id, session["user_id"])
+    ):
+        return jsonify({"error": "Please choose a valid priority."}), 400
+
     conn.execute(
         "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL)",
-        (session["user_id"], data.get("title"), data.get("detail"), data.get("location", ""),
-         data.get("date"), time_val, data.get("duration"), duration_minutes, data.get("priority_id"))
+        (session["user_id"], title, clean_text(data.get("detail"), MAX_TEXT_LEN),
+         clean_text(data.get("location"), MAX_TITLE_LEN), date, time_val,
+         clean_text(data.get("duration"), 40), duration_minutes, priority_id)
     )
     conn.commit()
     return jsonify({"status": "success"})
@@ -1029,8 +1053,10 @@ def reschedule_task():
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
     task_id = data.get("task_id")
-    new_date = data.get("new_date")
-    new_time = data.get("new_time")
+    new_date = clean_date(data.get("new_date"))
+    new_time = clean_time(data.get("new_time"))
+    if not new_date or not new_time:
+        return jsonify({"error": "Please pick a valid date and start time."}), 400
 
     conn = get_db()
     task = fetch_one(conn, "SELECT * FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
@@ -1181,7 +1207,7 @@ def update_task_detail():
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
     task_id = data.get("task_id")
-    new_detail = data.get("detail", "")
+    new_detail = clean_text(data.get("detail", ""), MAX_TEXT_LEN)
 
     conn = get_db()
     task = fetch_one(conn, "SELECT * FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))

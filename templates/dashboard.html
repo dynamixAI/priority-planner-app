@@ -1170,8 +1170,35 @@
 
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-    let allUserTasks = {{ all_tasks|tojson }};
+    // The page only receives this week's tasks and the few the catch-up
+    // banner needs. Lists (Done, Undone, Pushed, Missed) are fetched from
+    // the server when opened. allUserTasks holds every task loaded so far,
+    // so any task on screen can be found by its id.
     let currentWeekTasks = {{ tasks|tojson }};
+    let attentionTasks = {{ attention_tasks|tojson }};
+    let currentWeekStart = {{ cur_week_str|tojson }};
+    let allUserTasks = [];
+    rememberTasks(currentWeekTasks.concat(attentionTasks));
+
+    function rememberTasks(list) {
+      const byId = new Map(allUserTasks.map(t => [t.id, t]));
+      (list || []).forEach(t => byId.set(t.id, t));
+      allUserTasks = [...byId.values()];
+    }
+
+    async function fetchTaskList(status, date) {
+      let url = '/api/tasks/list?status=' + encodeURIComponent(status);
+      if (date) url += '&date=' + encodeURIComponent(date);
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const tasks = (await res.json()).tasks || [];
+        rememberTasks(tasks);
+        return tasks;
+      } catch (e) {
+        return [];
+      }
+    }
     const allPriorities = {{ priorities|tojson }};
     const gridOrientation = {{ grid_orientation|tojson }};
     const TIME_FORMAT = {{ time_format|tojson }};
@@ -1476,10 +1503,10 @@
     // Only 'pending' tasks are treated as occupying time — a completed,
     // missed, pushed, or already-replanned task isn't really happening at
     // its old slot anymore, so it shouldn't block a new one from using it.
-    function findOverlappingTask(date, timeStr, durationMinutes, excludeTaskId) {
+    function findOverlappingTask(tasks, date, timeStr, durationMinutes, excludeTaskId) {
       const newStart = timeToMinutes(timeStr);
       const newEnd = Math.min(newStart + durationMinutes, 1440);
-      return allUserTasks.find(t => {
+      return tasks.find(t => {
         if (t.status !== 'pending') return false;
         if (t.date !== date) return false;
         if (excludeTaskId !== undefined && t.id === excludeTaskId) return false;
@@ -1489,7 +1516,8 @@
     }
 
     async function warnIfOverlapping(date, timeStr, durationMinutes, excludeTaskId) {
-      const overlap = findOverlappingTask(date, timeStr, durationMinutes, excludeTaskId);
+      const sameDay = await fetchTaskList('pending', date);
+      const overlap = findOverlappingTask(sameDay, date, timeStr, durationMinutes, excludeTaskId);
       if (!overlap) return true;
       const r = taskRangeMinutes(overlap);
       const keepAnyway = await appConfirm(
@@ -1613,12 +1641,18 @@
     let missedModalOpen = false;
 
     async function refreshMetricsAndTasks() {
-      const res = await fetch('/api/metrics');
-      if (!res.ok) return;
+      const [res, weekRes] = await Promise.all([
+        fetch('/api/metrics'),
+        fetch('/api/tasks/week?week_start=' + encodeURIComponent(currentWeekStart))
+      ]);
+      if (!res.ok || !weekRes.ok) return;
       const data = await res.json();
+      const week = await weekRes.json();
 
-      allUserTasks = data.all_tasks;
-      currentWeekTasks = allUserTasks.filter(t => weekDatesIso.includes(t.date));
+      attentionTasks = data.attention_tasks;
+      currentWeekTasks = week.tasks;
+      allUserTasks = [];
+      rememberTasks(currentWeekTasks.concat(attentionTasks));
 
       updateMetricsDisplay(data.metrics);
       renderGrid();
@@ -1670,6 +1704,8 @@
 
       currentWeekTasks = data.tasks;
       weekDatesIso = data.week_dates_iso;
+      currentWeekStart = data.cur_week_str;
+      rememberTasks(currentWeekTasks);
 
       document.getElementById('exportWeekTitle').innerText = data.week_title;
 
@@ -1690,23 +1726,16 @@
     function initReconciliation() {
       const now = nowInUserTz();
 
-      const overduePending = allUserTasks.filter(t => {
+      // The server sends only tasks that need attention: open tasks from
+      // today or earlier, and missed tasks with no follow-up that haven't
+      // been dismissed. Here we just pick out the ones whose time has passed.
+      const overduePending = attentionTasks.filter(t => {
         if (t.status !== 'pending') return false;
         const taskEnd = new Date(`${t.date}T${t.time}`);
         return taskEnd < now;
       });
-
-      function chainRoot(t) { return t.origin_id || t.id; }
-      // A missed task counts as handled once ANY later task exists in its
-      // chain (pending, done, pushed or missed again), or once the user has
-      // chosen not to reschedule it. Otherwise completing the follow-up would
-      // bring the original miss back into the banner.
-      function hasFollowUp(t) {
-        const root = chainRoot(t);
-        return allUserTasks.some(x => x.origin_id === root && x.id > t.id);
-      }
-      const needsRescheduling = allUserTasks.filter(
-        t => t.status === 'missed' && !t.followup_dismissed && !hasFollowUp(t)
+      const needsRescheduling = attentionTasks.filter(
+        t => t.status === 'missed' && !t.followup_dismissed
       );
 
       const banner = document.getElementById('reconcileBanner');
@@ -1724,7 +1753,7 @@
         item.className = 'reconcile-item';
         item.innerHTML = `
           <div>
-            <b>${t.title}</b> &nbsp;•&nbsp; <small style="color: var(--metric-muted);">${t.date} at ${fmtTime(t.time)}</small>
+            <b>${escapeHtml(t.title)}</b> &nbsp;•&nbsp; <small style="color: var(--metric-muted);">${t.date} at ${fmtTime(t.time)}</small>
           </div>
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #16a34a;" onclick="resolveReconciliation(${t.id}, 'completed')">Done On Time</button>
@@ -1741,7 +1770,7 @@
         item.className = 'reconcile-item';
         item.innerHTML = `
           <div>
-            <b>${t.title}</b> &nbsp;•&nbsp; <small style="color: #ef4444;">Missed — ${t.date} at ${fmtTime(t.time)}</small>
+            <b>${escapeHtml(t.title)}</b> &nbsp;•&nbsp; <small style="color: #ef4444;">Missed — ${t.date} at ${fmtTime(t.time)}</small>
           </div>
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #ea580c;" onclick="openRescheduleModal(${t.id})">Reschedule</button>
@@ -2192,7 +2221,7 @@
       body.innerHTML = `
         <div class="detail-row">
           <b>Task Title</b>
-          <div style="font-size: 1.05rem; font-weight: bold;">${task.title}</div>
+          <div style="font-size: 1.05rem; font-weight: bold;">${escapeHtml(task.title)}</div>
         </div>
         <div class="detail-row">
           <b>Date & Time</b>
@@ -2209,17 +2238,17 @@
           <b>Priority Level</b>
           <div style="display:flex; align-items:center; gap:8px;">
             <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:${prio.color};"></span>
-            <span>${prio.label}</span>
+            <span>${escapeHtml(prio.label)}</span>
           </div>
           <div style="margin-top:8px; font-size:0.78rem; color:var(--metric-muted);">Change priority</div>
           <select id="detailPrioritySelect" onchange="updateTaskPriority(${task.id}, this.value)"
                   style="margin-top:4px; width:100%; padding:0.5rem 0.6rem; border-radius:6px; border:1px solid var(--border); background:var(--table-header); color:var(--text); font-size:0.85rem;">
-            ${allPriorities.map(p => `<option value="${p.id}" ${p.id === task.priority_id ? 'selected' : ''}>${p.label}</option>`).join('')}
+            ${allPriorities.map(p => `<option value="${p.id}" ${p.id === task.priority_id ? 'selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
           </select>
         </div>
         <div class="detail-row">
           <b>Location</b>
-          <div>${task.location ? task.location : '<span style="color:var(--metric-muted);">None specified</span>'}</div>
+          <div>${task.location ? escapeHtml(task.location) : '<span style="color:var(--metric-muted);">None specified</span>'}</div>
         </div>
         <div class="detail-row">
           <b style="display:flex; justify-content:space-between; align-items:center;">
@@ -2360,26 +2389,28 @@
       }
     }
 
-    function openTaskModal(filter) {
+    async function openTaskModal(filter) {
       currentModalFilter = filter;
       const modal = document.getElementById('listModal');
       const title = document.getElementById('modalTitle');
       const tbody = document.getElementById('modalTableBody');
       tbody.innerHTML = '';
 
-      let filtered = allUserTasks;
+      const listStatuses = ['completed', 'pending', 'rescheduled', 'missed'];
+      const loaded = listStatuses.includes(filter) ? await fetchTaskList(filter) : [];
+      let filtered = loaded;
       if (filter === 'completed') {
         title.innerText = 'Completed Tasks';
-        filtered = allUserTasks.filter(t => t.status === 'completed');
+        filtered = loaded.filter(t => t.status === 'completed');
       } else if (filter === 'pending') {
         title.innerText = 'Undone (Pending) Tasks';
-        filtered = allUserTasks.filter(t => t.status === 'pending');
+        filtered = loaded.filter(t => t.status === 'pending');
       } else if (filter === 'rescheduled') {
         title.innerText = 'Pushed (Rescheduled) Tasks';
-        filtered = allUserTasks.filter(t => t.status === 'rescheduled');
+        filtered = loaded.filter(t => t.status === 'rescheduled');
       } else if (filter === 'missed') {
         title.innerText = 'Missed Tasks';
-        filtered = allUserTasks.filter(t => t.status === 'missed');
+        filtered = loaded.filter(t => t.status === 'missed');
       }
 
       if (filtered.length === 0) {
@@ -2406,14 +2437,14 @@
               <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${fmtTime(t.time)}</span>
             </td>
             <td class="col-task">
-              <b style="color: var(--text);">${t.title}</b>
-              ${t.detail ? '<br><span style="font-size: 0.72rem; color: var(--metric-muted);">' + t.detail + '</span>' : ''}
-              ${t.location ? '<br><span style="font-size: 0.7rem; color: var(--primary);">📍 ' + t.location + '</span>' : ''}
+              <b style="color: var(--text);">${escapeHtml(t.title)}</b>
+              ${t.detail ? '<br><span style="font-size: 0.72rem; color: var(--metric-muted);">' + escapeHtml(t.detail) + '</span>' : ''}
+              ${t.location ? '<br><span style="font-size: 0.7rem; color: var(--primary);">📍 ' + escapeHtml(t.location) + '</span>' : ''}
             </td>
             <td class="col-priority">
               <span style="display: inline-flex; align-items: center; gap: 5px;">
                 <span style="width: 8px; height: 8px; border-radius: 2px; background: ${prio.color};"></span>
-                <span>${prio.label}</span>
+                <span>${escapeHtml(prio.label)}</span>
               </span>
             </td>
             <td class="col-status">
@@ -2435,9 +2466,9 @@
       document.getElementById('listModal').style.display = 'none';
     }
 
-    function renderMissedList(fromDate, toDate) {
+    async function renderMissedList(fromDate, toDate) {
       const tbody = document.getElementById('missedTableBody');
-      let filtered = allUserTasks.filter(t => t.status === 'missed');
+      let filtered = await fetchTaskList('missed');
 
       if (fromDate) filtered = filtered.filter(t => t.date >= fromDate);
       if (toDate) filtered = filtered.filter(t => t.date <= toDate);
@@ -2461,13 +2492,13 @@
           </td>
           <td>${dayName}</td>
           <td class="col-task">
-            <b style="color: var(--text);">${t.title}</b>
-            ${t.detail ? '<br><span style="font-size: 0.72rem; color: var(--metric-muted);">' + t.detail + '</span>' : ''}
+            <b style="color: var(--text);">${escapeHtml(t.title)}</b>
+            ${t.detail ? '<br><span style="font-size: 0.72rem; color: var(--metric-muted);">' + escapeHtml(t.detail) + '</span>' : ''}
           </td>
           <td class="col-priority">
             <span style="display: inline-flex; align-items: center; gap: 5px;">
               <span style="width: 8px; height: 8px; border-radius: 2px; background: ${prio.color};"></span>
-              <span>${prio.label}</span>
+              <span>${escapeHtml(prio.label)}</span>
             </span>
           </td>
         `;
