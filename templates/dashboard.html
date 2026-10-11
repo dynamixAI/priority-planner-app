@@ -2,10 +2,12 @@
 <html lang="en" data-theme="{{ theme }}">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <meta name="theme-color" content="#00d6e8">
+  <meta name="theme-color" content="#eef2f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d1617" media="(prefers-color-scheme: dark)">
   <title>Agenndar</title>
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -796,6 +798,489 @@
       .grid-container { border: 1px solid #94a3b8 !important; overflow: visible !important; }
       th, td { border: 1px solid #cbd5e1 !important; }
     }
+
+    /* ==================================================================
+       Agenndar look: cool teal-tinted neutrals, one brand teal, Onest.
+       Later rules here override the older ones above.
+       ================================================================== */
+    @font-face {
+      font-family: 'Onest';
+      src: url("{{ url_for('static', filename='fonts/Onest-Variable.woff2') }}")
+          format('woff2');
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+    :root {
+      --bg: #eef2f2;
+      --card-bg: #ffffff;
+      --sidebar-bg: #ffffff;
+      --text: #13201f;
+      --border: #d9e1e1;
+      --slot-hover: #e6eeee;
+      --table-header: #f6f8f8;
+      --primary: #0b8a97;
+      --primary-hover: #08707b;
+      --metric-muted: #5b6b6b;
+      --dropdown-shadow: rgba(10, 30, 32, 0.12);
+      --hour-line: #e8eded;
+      --radius: 14px;
+    }
+    [data-theme="dark"] {
+      --bg: #0d1617;
+      --card-bg: #142123;
+      --sidebar-bg: #142123;
+      --text: #e6efef;
+      --border: #23373a;
+      --slot-hover: #1b2c2f;
+      --table-header: #111c1e;
+      --primary: #33d1de;
+      --primary-hover: #5cdce6;
+      --metric-muted: #8fa3a3;
+      --dropdown-shadow: rgba(0, 0, 0, 0.5);
+      --hour-line: #1a2a2c;
+    }
+    body {
+      font-family: 'Onest', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font-family: inherit; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    [data-theme="dark"] .btn-create,
+    [data-theme="dark"] .install-banner-btn { color: #062226; }
+
+    /* Form panel */
+    .sidebar { padding: 1.4rem 1.25rem; }
+    .sidebar-header { border-bottom: none; padding-bottom: 0; margin-bottom: 1.1rem; }
+    .sidebar-header .panel-title {
+      font-size: 1.15rem; font-weight: 650; text-transform: none; letter-spacing: 0;
+    }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--metric-muted);
+      margin-bottom: 0.35rem;
+    }
+    .form-group input, .form-group select {
+      padding: 0.65rem 0.75rem; font-size: 0.9rem; border-radius: 10px;
+      background: var(--table-header);
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none; border-color: var(--primary); background: var(--card-bg);
+    }
+    .time-wheel { border-radius: 12px; background: var(--table-header); }
+    .btn-create {
+      border-radius: 10px;
+      padding: 0.8rem;
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+
+    /* Header */
+    .top-nav { margin-bottom: 1.1rem; }
+    .week-title { font-size: 1.3rem; font-weight: 650; letter-spacing: -0.01em; }
+    .week-nav {
+      gap: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 3px;
+    }
+    .nav-btn {
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.82rem;
+      padding: 0.45rem 0.75rem;
+    }
+    .nav-btn:hover { background: var(--slot-hover); }
+    .export-btn {
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      border-radius: 10px;
+    }
+    .btn-hamburger { border-radius: 10px; }
+    .avatar-badge { border: none; }
+    [data-theme="dark"] .avatar-badge { color: #062226; }
+    .profile-dropdown { border-radius: 12px; }
+
+    /* Catch-up banner */
+    .reconciliation-banner {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-left: 4px solid #e2a514;
+      border-radius: var(--radius);
+      padding: 0.9rem 1rem 0.4rem;
+      gap: 0;
+    }
+    .banner-title {
+      font-size: 0.95rem;
+      font-weight: 650;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
+    [data-theme="dark"] .banner-title { color: var(--text); }
+    .banner-sub { font-size: 0.78rem; font-weight: 400; color: var(--metric-muted); }
+    .reconcile-item {
+      background: transparent; border: none; border-radius: 0;
+      border-top: 1px solid var(--border);
+      padding: 0.6rem 0;
+      font-size: 0.86rem;
+      gap: 0.75rem;
+    }
+    .btn-rec { border-radius: 8px; padding: 0.35rem 0.65rem; font-size: 0.78rem; }
+
+    /* Numbers strip: one surface, Behaviour Index first */
+    .metrics-bar {
+      grid-template-columns: 1.7fr repeat(5, 1fr);
+      gap: 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 0.9rem;
+    }
+    .metric-card {
+      border: none; border-radius: 0; box-shadow: none; background: transparent;
+      border-left: 1px solid var(--border); padding: 0.85rem 1rem;
+    }
+    #bhiCard { order: -1; border-left: none !important; }
+    .metric-card.interactive:hover { transform: none; background: var(--slot-hover); }
+    .metric-label {
+      text-transform: none; font-size: 0.78rem; font-weight: 600;
+      color: var(--metric-muted) !important; letter-spacing: 0;
+    }
+    .metric-num {
+      font-size: 1.6rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin-top: 0.15rem;
+    }
+    .late-count { font-size: 0.78rem; letter-spacing: 0; }
+    .bhi-num { display: flex; align-items: baseline; gap: 0.5rem; }
+    .bhi-tier { font-size: 0.85rem; font-weight: 650; letter-spacing: 0; }
+    #bhiCard[data-tier="Disciplined"] .bhi-tier { color: #1a7f45; }
+    #bhiCard[data-tier="Drifting"] .bhi-tier { color: #9a6200; }
+    #bhiCard[data-tier="Avoidance"] .bhi-tier { color: #c2333a; }
+    [data-theme="dark"] #bhiCard[data-tier="Disciplined"] .bhi-tier {
+      color: #4cc982;
+    }
+    [data-theme="dark"] #bhiCard[data-tier="Drifting"] .bhi-tier { color: #f0bf4c; }
+    [data-theme="dark"] #bhiCard[data-tier="Avoidance"] .bhi-tier { color: #ff7a7f; }
+    .bhi-meter {
+      position: relative; height: 6px; margin-top: 0.6rem; border-radius: 3px;
+      background: linear-gradient(to right,
+        #e5484d 0 calc(50% - 1px), transparent calc(50% - 1px) calc(50% + 1px),
+        #e2a514 calc(50% + 1px) calc(80% - 1px), transparent calc(80% - 1px) calc(80%
+            + 1px),
+        #1f9d55 calc(80% + 1px) 100%);
+    }
+    .bhi-marker {
+      position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--card-bg); border: 3px solid var(--text);
+      transform: translate(-50%, -50%);
+      transition: left 0.4s ease;
+    }
+
+    /* Priority key: quiet, no box */
+    .legend-bar {
+      background: transparent;
+      border: none;
+      padding: 0 0.15rem;
+      margin-bottom: 0.7rem;
+      gap: 1rem;
+    }
+    .legend-bar > span { font-weight: 600 !important; }
+    .legend-tag { font-size: 0.78rem; color: var(--metric-muted); }
+    .legend-color { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* Timetable */
+    .grid-container {
+      border-radius: var(--radius);
+      overflow: auto;
+      flex: none;
+      max-height: max(420px, calc(100vh - 290px));
+    }
+    #scheduleTable thead th {
+      position: sticky; top: 0; z-index: 4;
+      background: var(--table-header);
+    }
+    th, td { border-color: var(--hour-line); }
+    th { font-size: 0.8rem; font-weight: 600; padding: 0.55rem 0.35rem; }
+    th span { font-weight: 500; }
+    .time-col { font-weight: 500; font-size: 0.74rem; background: var(--card-bg); }
+    .task-card {
+      background: color-mix(in srgb, var(--p) 16%, var(--card-bg));
+      border-left: 3px solid var(--p);
+      color: var(--text);
+      border-radius: 7px;
+      box-shadow: none;
+      padding: 0.3rem 0.45rem;
+    }
+    [data-theme="dark"] .task-card {
+      background: color-mix(in srgb, var(--p) 24%, var(--card-bg));
+    }
+    .task-card:hover {
+      transform: none;
+      box-shadow: 0 4px 14px var(--dropdown-shadow);
+      z-index: 5;
+    }
+    .card-title, .task-card.dark-text .card-title {
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-shadow: none;
+    }
+    .card-detail, .card-location {
+      color: var(--metric-muted);
+      text-shadow: none;
+      font-style: normal;
+    }
+    .task-card.completed {
+      opacity: 1;
+      text-decoration: none;
+      background: color-mix(in srgb, var(--p) 6%, var(--card-bg));
+      border-left-color: color-mix(in srgb, var(--p) 55%, var(--card-bg));
+    }
+    .task-card.completed .card-title {
+      text-decoration: line-through;
+      color: var(--metric-muted);
+    }
+    .task-card.completed .card-title::before {
+      content: "\2713\0020";
+      color: #1f9d55;
+      text-decoration: none;
+      display: inline-block;
+      margin-right: 2px;
+    }
+    .task-card.missed {
+      border: 1.5px solid #e5484d; border-left: 3px solid #e5484d;
+      box-shadow: none; opacity: 1;
+      background: color-mix(in srgb, #e5484d 10%, var(--card-bg));
+    }
+    .task-card.rescheduled, .task-card.replanned {
+      outline: none; opacity: 0.6;
+      border: 1.5px dashed #ea580c; border-left: 3px solid var(--p);
+      background: transparent;
+    }
+    .task-card.replanned {
+      border-color: var(--metric-muted);
+      border-left-color: var(--p);
+    }
+
+    /* Dialogs */
+    .modal-overlay { background: rgba(8, 18, 20, 0.55); }
+    .modal-content { border-radius: 18px; }
+    .modal-header { border-bottom: none; padding-bottom: 0; }
+    .modal-table th { text-transform: none; letter-spacing: 0; font-size: 0.78rem; }
+    .detail-row b { text-transform: none; font-size: 0.76rem; font-weight: 600; }
+    .tbl-action-btn { border-radius: 8px; }
+
+    /* Stop the header, banner and numbers strip being squashed by the
+       timetable in the column layout. */
+    .main-content > * { flex-shrink: 0; }
+
+    /* Phone-only pieces, hidden on larger screens */
+    .day-strip, .fab, .sheet-backdrop, .week-range, .menu-export { display: none; }
+    .print-mode .day-strip, .print-mode .fab { display: none !important; }
+    .print-mode .grid-container {
+      max-height: none !important;
+      overflow: visible !important;
+    }
+    .print-mode #scheduleTable thead th { position: static; }
+
+    /* ==================================================================
+       Phones: full-screen app layout, one day at a time, add-task sheet
+       ================================================================== */
+    @media (max-width: 760px) {
+      body { display: block; height: auto; min-height: 100dvh; overflow: auto; }
+      .main-content {
+        padding: calc(0.75rem + env(safe-area-inset-top)) 0.9rem calc(6rem +
+            env(safe-area-inset-bottom));
+        overflow: visible;
+      }
+
+      /* Header: week title + profile on top, week arrows underneath */
+      .top-nav {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "title profile" "nav nav";
+        gap: 0.6rem;
+        margin-bottom: 0.6rem;
+      }
+      .top-nav { grid-template-areas: "profile profile" "nav nav"; }
+      .week-title, .export-btn { display: none !important; }
+      .right-controls { grid-area: profile; width: 100%; }
+      .profile-hub { flex: 1; justify-content: space-between; }
+      .left-controls { grid-area: nav; }
+      .week-range { display: inline; font-weight: 650; }
+      .menu-export { display: flex; }
+      .week-nav { width: 100%; justify-content: space-between; }
+      .nav-btn { padding: 0.55rem 0.9rem; font-size: 0.85rem; }
+      #curWeekBtn { flex: 1; justify-content: center; }
+      .nav-label, .brand-user, .btn-hamburger { display: none !important; }
+      .export-btn { padding: 0.45rem 0.6rem; }
+      .profile-hub { padding: 0.15rem; gap: 0.4rem; }
+      .brand-title { font-size: 1.25rem; }
+      .avatar-badge { width: 32px; height: 32px; font-size: 0.85rem; }
+      .profile-dropdown { width: min(260px, 85vw); }
+
+      /* Day strip */
+      .day-strip {
+        display: grid;
+        grid-template-columns: repeat(var(--n, 7), 1fr);
+        gap: 4px;
+        margin-bottom: 0.8rem;
+      }
+      .day-pill {
+        border: none; background: transparent; color: var(--metric-muted);
+        padding: 0.45rem 0 0.35rem; border-radius: 12px; cursor: pointer;
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        font-size: 0.72rem; font-weight: 500;
+      }
+      .day-pill b { font-size: 1.05rem; font-weight: 650; color: var(--text); }
+      .day-pill i {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--primary);
+        opacity: 0;
+      }
+      .day-pill.has-tasks i { opacity: 1; }
+      .day-pill.today b { color: var(--primary); }
+      .day-pill.active { background: var(--text); color: var(--bg); }
+      .day-pill.active b { color: var(--bg); }
+      .day-pill.active i { background: var(--bg); }
+
+      /* Catch-up items stack: task on top, buttons in a row underneath */
+      .banner-title { flex-direction: column; align-items: flex-start; gap: 0.15rem; }
+      .reconcile-item { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+      .reconciliation-banner { padding: 0.8rem 0.85rem 0.3rem; }
+      .reconcile-item { gap: 0.4rem; padding: 0.55rem 0; }
+      .reconcile-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+        gap: 0.35rem;
+      }
+      .btn-rec { padding: 0.45rem 0.2rem; font-size: 0.78rem; white-space: nowrap; }
+
+      /* Numbers: a sideways-scrolling strip */
+      .metrics-bar {
+        display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+        scrollbar-width: none; margin-left: -0.9rem; margin-right: -0.9rem;
+        border-radius: 0; border-left: none; border-right: none;
+      }
+      .metrics-bar::-webkit-scrollbar { display: none; }
+      .metric-card {
+        flex: 0 0 auto;
+        min-width: 104px;
+        scroll-snap-align: start;
+        padding: 0.75rem 0.9rem;
+      }
+      #bhiCard { min-width: 210px; }
+      .metric-num { font-size: 1.35rem; }
+      .legend-bar { display: none; }
+
+      /* One-day timetable fills the width */
+      .grid-container {
+        max-height: 72dvh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border-radius: var(--radius);
+      }
+      table, #scheduleTable.day-rows { min-width: 0; }
+      .time-col { width: 54px; font-size: 0.7rem; }
+      #scheduleTable thead { display: none; }
+      .card-title { font-size: 0.86rem; }
+      .card-detail { font-size: 0.75rem; }
+
+      /* Add-task button */
+      .fab {
+        display: flex; align-items: center; justify-content: center;
+        position: fixed;
+        right: 1.1rem;
+        bottom: calc(1.1rem + env(safe-area-inset-bottom));
+        width: 58px; height: 58px; border-radius: 18px; border: none;
+        background: var(--primary);
+        color: #fff;
+        font-size: 2rem;
+        font-weight: 300;
+        line-height: 1;
+        box-shadow: 0 10px 28px color-mix(in srgb, var(--primary) 40%, transparent);
+        z-index: 900; cursor: pointer;
+      }
+      [data-theme="dark"] .fab { color: #062226; }
+
+      /* Add-task form: a sheet that slides up from the bottom */
+      .sidebar, .sidebar.collapsed {
+        position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+        width: auto; min-width: 0; max-height: 90dvh;
+        margin-left: 0; border-right: none;
+        border-radius: 22px 22px 0 0;
+        padding: 0.6rem 1.1rem calc(1.25rem + env(safe-area-inset-bottom));
+        transform: translateY(105%);
+        transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.22);
+        z-index: 1000; pointer-events: auto;
+      }
+      .sidebar::before {
+        content: "";
+        display: block;
+        flex: none;
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--border); margin: 0.2rem auto 0.9rem;
+      }
+      body.sheet-open .sidebar { transform: none; }
+      .sheet-backdrop {
+        display: block; position: fixed; inset: 0; z-index: 999;
+        background: rgba(8, 18, 20, 0.45);
+        opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+      }
+      body.sheet-open .sheet-backdrop { opacity: 1; pointer-events: auto; }
+      body.sheet-open .fab { display: none; }
+      /* stops iPhone zooming in */
+      .form-group input, .form-group select {
+        font-size: 16px;
+      }
+
+      /* Dialogs become bottom sheets too */
+      .modal-overlay { align-items: flex-end; }
+      .modal-content {
+        width: 100% !important; max-width: 100%; max-height: 92dvh; overflow-y: auto;
+        border-radius: 22px 22px 0 0;
+        padding: 1.1rem 1.1rem calc(1.25rem + env(safe-area-inset-bottom));
+      }
+      .modal-header .nav-btn { display: none; }
+      .modal-table thead { display: none; }
+      .modal-table, .modal-table tbody { display: block; }
+      .modal-table tr {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.75rem;
+        padding: 0.8rem 0; border-bottom: 1px solid var(--border);
+      }
+      .modal-table td {
+        display: block;
+        width: auto !important;
+        padding: 0;
+        border: none;
+        font-size: 0.82rem;
+        text-align: left;
+      }
+      .modal-table td.col-task { order: -1; flex: 1 1 100%; }
+      .modal-table td.col-action { margin-left: auto; }
+      #modalPrintArea, #missedModal .modal-content > div:last-child {
+        max-height: none !important;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .sidebar, .sheet-backdrop, .bhi-marker { transition: none !important; }
+      .wheel-col { scroll-behavior: auto; }
+    }
   </style>
 </head>
 <body>
@@ -803,23 +1288,23 @@
   <!-- Sliding Sidebar Drawer -->
   <aside class="sidebar" id="taskSidebar">
     <div class="sidebar-header">
-      <div class="panel-title">Add New Task</div>
+      <div class="panel-title">New task</div>
       <button class="btn-close-drawer" onclick="toggleSidebar(false)" title="Close Drawer">✕</button>
     </div>
 
     <div class="form-group">
-      <label>1. Date (Click to choose)</label>
+      <label>Date</label>
       <input type="date" id="inputDate" value="{{ cur_week_str }}" onclick="this.showPicker()">
     </div>
 
     <div class="form-group">
-      <label>2. Start Time</label>
+      <label>Start time</label>
       <div class="time-wheel" data-for="inputTime"></div>
         <input type="hidden" id="inputTime" value="09:00">
     </div>
 
     <div class="form-group">
-      <label>3. Duration</label>
+      <label>Duration</label>
       <select id="inputDuration" onchange="toggleCustomDuration()">
         <option value="30 mins">30 mins</option>
         <option value="45 mins">45 mins</option>
@@ -841,7 +1326,7 @@
     </div>
 
     <div class="form-group">
-      <label>4. Priority Tier</label>
+      <label>Priority</label>
       <select id="inputPriority">
         {% for p in priorities %}
         <option value="{{ p.id }}">{{ p.label }}</option>
@@ -850,21 +1335,21 @@
     </div>
 
     <div class="form-group">
-      <label>5. Task</label>
+      <label>Task</label>
       <input type="text" id="inputTitle" placeholder="e.g. Prepare project proposal">
     </div>
 
     <div class="form-group">
-      <label>6. Details</label>
+      <label>Details (optional)</label>
       <input type="text" id="inputDetail" placeholder="e.g. Draft outline and review objectives">
     </div>
 
     <div class="form-group">
-      <label>7. Location (Optional)</label>
+      <label>Location (optional)</label>
       <input type="text" id="inputLocation" placeholder="e.g. Office, Zoom, Coffee Shop">
     </div>
 
-    <button class="btn-create" onclick="submitTask()">Schedule Task</button>
+    <button class="btn-create" onclick="submitTask()">Add task</button>
   </aside>
 
   <!-- Main Content Area -->
@@ -884,9 +1369,9 @@
           ☰
         </button>
         <div class="week-nav">
-          <a href="/dashboard?week_start={{ prev_week }}" class="nav-btn" id="prevWeekBtn" onclick="return navigateWeek(event, this.href)">← Prev Week</a>
-          <a href="/dashboard" class="nav-btn" id="curWeekBtn" onclick="return navigateWeek(event, '/dashboard')">Current Week</a>
-          <a href="/dashboard?week_start={{ next_week }}" class="nav-btn" id="nextWeekBtn" onclick="return navigateWeek(event, this.href)">Next Week →</a>
+          <a href="/dashboard?week_start={{ prev_week }}" class="nav-btn" id="prevWeekBtn" onclick="return navigateWeek(event, this.href)" aria-label="Previous week">←<span class="nav-label"> Prev week</span></a>
+          <a href="/dashboard" class="nav-btn" id="curWeekBtn" onclick="return navigateWeek(event, '/dashboard')"><span class="nav-label">This week</span><span class="week-range" id="weekRangeShort"></span></a>
+          <a href="/dashboard?week_start={{ next_week }}" class="nav-btn" id="nextWeekBtn" onclick="return navigateWeek(event, this.href)" aria-label="Next week"><span class="nav-label">Next week </span>→</a>
         </div>
       </div>
 
@@ -894,8 +1379,8 @@
 
       <!-- Right Header Profile & Action Hub -->
       <div class="right-controls">
-        <button class="nav-btn" onclick="openExportModal()">
-          <span>🖨️ Export / Print</span>
+        <button class="nav-btn export-btn" onclick="openExportModal()" aria-label="Export or print">
+          <span>🖨️<span class="nav-label"> Export</span></span>
         </button>
 
         <div class="profile-hub" id="profileHub" onclick="toggleProfileDropdown(event)">
@@ -916,6 +1401,9 @@
             <button type="button" class="dropdown-item" onclick="openInstallPromptManually()">
               <span>📲 Install Agenndar</span>
             </button>
+            <button type="button" class="dropdown-item menu-export" onclick="openExportModal()">
+              <span>🖨️ Export or print</span>
+            </button>
             <a href="/settings" class="dropdown-item">
               <span>⚙️ Settings</span>
             </a>
@@ -928,11 +1416,14 @@
       </div>
     </div>
 
+    <!-- Phone day picker: one day of the week at a time -->
+    <div class="day-strip" id="dayStrip"></div>
+
     <!-- Morning/Next-Login Reconciliation Check-in Banner -->
     <div class="reconciliation-banner" id="reconcileBanner" style="display: none;">
       <div class="banner-title">
-        <span>⏰ Unconfirmed Past Tasks — Quick Catch-up</span>
-        <span style="font-size: 0.72rem; font-weight: normal; color: var(--text);">Clear these to keep your behavioural score accurate</span>
+        <span>What happened with these?</span>
+        <span class="banner-sub">Answer to keep your Behaviour Index accurate</span>
       </div>
       <div id="reconcileList"></div>
     </div>
@@ -941,7 +1432,7 @@
     <div class="metrics-bar">
       <!-- 1. Total Logged: Strictly static, non-clickable, no popup -->
       <div class="metric-card static">
-        <div class="metric-label" style="color: #0284c7;">Total Logged</div>
+        <div class="metric-label" style="color: #0284c7;">Total logged</div>
         <div class="metric-num" id="metricTotalLogged" style="color: #0284c7;">{{ metrics.total_logged }}</div>
       </div>
       <!-- 2. Missed: pure counter, opens a read-only history list -->
@@ -965,10 +1456,13 @@
         <div class="metric-num" id="metricPushed" style="color: #ea580c;">{{ metrics.pushed }}</div>
       </div>
       <!-- 6. Behavioral Health Index Card -->
-      <div class="metric-card interactive" id="bhiCard" style="border-left: 4px solid {{ metrics.bhi_color }};" onclick="window.location.href='/trends'">
-        <div class="metric-label" id="metricBhiLabel" style="color: {{ metrics.bhi_color }};">Behaviour Index 📈</div>
-        <div class="metric-num" style="font-size: 1.15rem;">
-          <span id="metricBhiScore" style="color: {{ metrics.bhi_color }};">{{ metrics.bhi_score }}</span> <span id="metricBhiTier" style="font-size: 0.75rem; font-weight: normal;">({{ metrics.bhi_tier }})</span>
+      <div class="metric-card interactive" id="bhiCard" data-tier="{{ metrics.bhi_tier }}" onclick="window.location.href='/trends'">
+        <div class="metric-label" id="metricBhiLabel">Behaviour Index</div>
+        <div class="metric-num bhi-num">
+          <span id="metricBhiScore">{{ metrics.bhi_score }}</span> <span id="metricBhiTier" class="bhi-tier">{{ metrics.bhi_tier }}</span>
+        </div>
+        <div class="bhi-meter" aria-hidden="true">
+          <span class="bhi-marker" id="bhiMarker" style="left: {{ metrics.bhi_score }}%;"></span>
         </div>
       </div>
     </div>
@@ -999,6 +1493,9 @@
          which has no meaningful row lines on paper — this is a separate,
          simpler structure so printed output gets real table borders. -->
   </main>
+
+  <button class="fab" id="fabAddTask" onclick="toggleSidebar(true)" aria-label="Add a task">+</button>
+  <div class="sheet-backdrop" id="sheetBackdrop" onclick="toggleSidebar(false)"></div>
 
   <div class="install-banner" id="installBanner">
     <div class="install-banner-text" id="installBannerText"></div>
@@ -1204,6 +1701,43 @@
     const TIME_FORMAT = {{ time_format|tojson }};
     const USER_TZ = {{ user_timezone|tojson }};
     let weekDatesIso = {{ week_dates_iso|tojson }};
+
+    // Phones show one day at a time (picked from the day strip or by
+    // swiping); larger screens show the whole week.
+    const mobileQuery = window.matchMedia('(max-width: 760px)');
+    function isMobileView() { return mobileQuery.matches; }
+    let mobileDay = null;
+    function isoOf(d) {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+        + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    // "Today", "Yesterday", "Tomorrow", else e.g. "Tue 6 Oct".
+    function friendlyDate(iso) {
+      const today = nowInUserTz(); today.setHours(0, 0, 0, 0);
+      const d = new Date(iso + 'T00:00:00');
+      const diff = Math.round((d - today) / 86400000);
+      if (diff === 0) return 'Today';
+      if (diff === -1) return 'Yesterday';
+      if (diff === 1) return 'Tomorrow';
+      return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+
+    function updateWeekRange() {
+      const el = document.getElementById('weekRangeShort');
+      if (!el || !weekDatesIso.length) return;
+      const a = new Date(weekDatesIso[0] + 'T00:00:00');
+      const b = new Date(weekDatesIso[weekDatesIso.length - 1] + 'T00:00:00');
+      const mon = d => d.toLocaleDateString('en-GB', { month: 'short' });
+      el.textContent = a.getMonth() === b.getMonth()
+        ? `${a.getDate()} – ${b.getDate()} ${mon(b)}`
+        : `${a.getDate()} ${mon(a)} – ${b.getDate()} ${mon(b)}`;
+    }
+
+    function selectedMobileDay() {
+      if (mobileDay && weekDatesIso.includes(mobileDay)) return mobileDay;
+      const todayIso = isoOf(nowInUserTz());
+      return weekDatesIso.includes(todayIso) ? todayIso : weekDatesIso[0];
+    }
     const HOUR_PX_V = 75;
     const HOUR_PX_H = 130;
     const MIN_BLOCK_V = 28;
@@ -1417,7 +1951,7 @@
       }
 
       return `
-        <div class="task-card ${statusClasses}" style="${posStyle} background-color: ${prio.color}; color: ${textColor};" onclick="showTaskDetail(${task.id})">
+        <div class="task-card ${statusClasses}" style="${posStyle} --p: ${prio.color};" onclick="showTaskDetail(${task.id})">
           <div class="card-title">${escapeHtml(task.title)}${task.status === 'completed' && task.completed_late ? '<span class="late-tag">Late</span>' : ''}</div>
           <div class="card-detail">🕒 ${timeLabel}</div>
           ${task.detail ? `<div class="card-detail">${escapeHtml(task.detail)}</div>` : ''}
@@ -1544,7 +2078,11 @@
       const table = document.getElementById('scheduleTable');
       const headRow = document.getElementById('scheduleTableHead');
       const tbody = table.querySelector('tbody');
-      const dayRows = gridOrientation === 'day_rows';
+      const mobile = isMobileView();
+      const dayRows = gridOrientation === 'day_rows' && !mobile;
+      const gridDates = mobile ? [selectedMobileDay()] : weekDatesIso;
+      renderDayStrip();
+      updateWeekRange();
 
       let minH = 0, maxH = 23;
       if (activeHoursOnly) {
@@ -1566,7 +2104,7 @@
       headRow.appendChild(corner);
 
       if (!dayRows) {
-        weekDatesIso.forEach(iso => {
+        gridDates.forEach(iso => {
           const lbl = dayLabelsFromIso(iso);
           const th = document.createElement('th');
           th.innerHTML = lbl.name + '<br><span style="font-size: 0.7rem; color: var(--metric-muted);">' + lbl.short + '</span>';
@@ -1582,7 +2120,7 @@
           tr.appendChild(timeTd);
 
           if (i === 0) {
-            weekDatesIso.forEach(cellDate => {
+            gridDates.forEach(cellDate => {
               const td = document.createElement('td');
               td.className = 'slot-cell day-track-cell';
               td.rowSpan = visibleHours;
@@ -1610,7 +2148,7 @@
         headRow.appendChild(th);
       });
 
-      weekDatesIso.forEach(cellDate => {
+      gridDates.forEach(cellDate => {
         const lbl = dayLabelsFromIso(cellDate);
         const tr = document.createElement('tr');
 
@@ -1635,6 +2173,52 @@
 
         tbody.appendChild(tr);
       });
+    }
+
+    // Day picker shown above the timetable on phones.
+    function renderDayStrip() {
+      const strip = document.getElementById('dayStrip');
+      if (!strip) return;
+      const active = selectedMobileDay();
+      const todayIso = isoOf(nowInUserTz());
+      strip.style.setProperty('--n', weekDatesIso.length);
+      strip.innerHTML = weekDatesIso.map(iso => {
+        const d = new Date(iso + 'T00:00:00');
+        const count = currentWeekTasks.filter(t => t.date === iso).length;
+        const cls = ['day-pill', iso === active ? 'active' : '',
+          iso === todayIso ? 'today' : '', count ? 'has-tasks' : ''].join(' ');
+        return `<button type="button" class="${cls}" onclick="pickMobileDay('${iso}')"
+          aria-pressed="${iso === active}" aria-label="${DAY_NAMES[d.getDay()]} ${d.getDate()}">
+          <span>${DAY_NAMES[d.getDay()].slice(0, 2)}</span><b>${d.getDate()}</b><i></i></button>`;
+      }).join('');
+    }
+
+    function pickMobileDay(iso) {
+      mobileDay = iso;
+      renderGrid();
+      scrollGridToStart();
+    }
+
+    function stepMobileDay(delta) {
+      const i = weekDatesIso.indexOf(selectedMobileDay()) + delta;
+      if (i >= 0 && i < weekDatesIso.length) pickMobileDay(weekDatesIso[i]);
+    }
+
+    // Open the timetable at the start of the day's first task (or 7am),
+    // instead of at midnight.
+    function scrollGridToStart() {
+      const box = document.getElementById('gridContainer');
+      if (!box) return;
+      const shown = isMobileView() ? [selectedMobileDay()] : weekDatesIso;
+      const starts = currentWeekTasks.filter(t => shown.includes(t.date))
+        .map(t => timeToMinutes(t.time));
+      const first = starts.length ? Math.min(...starts) : 7 * 60;
+      const target = Math.max(0, Math.min(first, 7 * 60) / 60 - hourRangeMin - 0.25);
+      if (gridOrientation === 'day_rows' && !isMobileView()) {
+        box.scrollLeft = target * HOUR_PX_H;
+      } else {
+        box.scrollTop = target * HOUR_PX_V;
+      }
     }
 
     let currentModalFilter = null;
@@ -1678,11 +2262,10 @@
       document.getElementById('metricUndone').innerText = metrics.undone;
       document.getElementById('metricPushed').innerText = metrics.pushed;
 
-      document.getElementById('bhiCard').style.borderLeftColor = metrics.bhi_color;
-      document.getElementById('metricBhiLabel').style.color = metrics.bhi_color;
-      document.getElementById('metricBhiScore').style.color = metrics.bhi_color;
+      document.getElementById('bhiCard').dataset.tier = metrics.bhi_tier;
       document.getElementById('metricBhiScore').innerText = metrics.bhi_score;
-      document.getElementById('metricBhiTier').innerText = '(' + metrics.bhi_tier + ')';
+      document.getElementById('metricBhiTier').innerText = metrics.bhi_tier;
+      document.getElementById('bhiMarker').style.left = metrics.bhi_score + '%';
     }
 
     function navigateWeek(event, href) {
@@ -1706,6 +2289,7 @@
       weekDatesIso = data.week_dates_iso;
       currentWeekStart = data.cur_week_str;
       rememberTasks(currentWeekTasks);
+      mobileDay = null;
 
       document.getElementById('exportWeekTitle').innerText = data.week_title;
 
@@ -1716,6 +2300,7 @@
       history.pushState({ weekStart: weekStart || null }, '', newUrl);
 
       renderGrid();
+      scrollGridToStart();
     }
 
     window.addEventListener('popstate', () => {
@@ -1753,11 +2338,11 @@
         item.className = 'reconcile-item';
         item.innerHTML = `
           <div>
-            <b>${escapeHtml(t.title)}</b> &nbsp;•&nbsp; <small style="color: var(--metric-muted);">${t.date} at ${fmtTime(t.time)}</small>
+            <b>${escapeHtml(t.title)}</b> &nbsp;•&nbsp; <small style="color: var(--metric-muted);">${friendlyDate(t.date)}, ${fmtTime(t.time)}</small>
           </div>
           <div class="reconcile-actions">
-            <button class="btn-rec" style="color: #16a34a;" onclick="resolveReconciliation(${t.id}, 'completed')">Done On Time</button>
-            <button class="btn-rec" style="color: #0284c7;" onclick="resolveReconciliation(${t.id}, 'completed', true)">Done Late</button>
+            <button class="btn-rec" style="color: #16a34a;" onclick="resolveReconciliation(${t.id}, 'completed')">Done</button>
+            <button class="btn-rec" style="color: #0284c7;" onclick="resolveReconciliation(${t.id}, 'completed', true)">Done late</button>
             <button class="btn-rec" style="color: #ea580c;" onclick="openRescheduleModal(${t.id})">Push</button>
             <button class="btn-rec" style="color: #ef4444;" onclick="resolveReconciliation(${t.id}, 'missed')">Missed</button>
           </div>
@@ -1770,11 +2355,11 @@
         item.className = 'reconcile-item';
         item.innerHTML = `
           <div>
-            <b>${escapeHtml(t.title)}</b> &nbsp;•&nbsp; <small style="color: #ef4444;">Missed — ${t.date} at ${fmtTime(t.time)}</small>
+            <b>${escapeHtml(t.title)}</b> &nbsp;•&nbsp; <small style="color: #e5484d;">Missed ${friendlyDate(t.date)}, ${fmtTime(t.time)}</small>
           </div>
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #ea580c;" onclick="openRescheduleModal(${t.id})">Reschedule</button>
-            <button class="btn-rec" style="color: var(--metric-muted);" onclick="dismissFollowup(${t.id}, this)">Don't Reschedule</button>
+            <button class="btn-rec" style="color: var(--metric-muted);" onclick="dismissFollowup(${t.id}, this)">Don't reschedule</button>
           </div>
         `;
         list.appendChild(item);
@@ -1903,6 +2488,29 @@
       });
       renderGrid();
       initReconciliation();
+      scrollGridToStart();
+
+      mobileQuery.addEventListener('change', () => {
+        document.body.classList.remove('sheet-open');
+        renderGrid();
+        scrollGridToStart();
+      });
+
+      // Swipe left/right on the timetable to change day on phones.
+      const grid = document.getElementById('gridContainer');
+      let touchX = null, touchY = null;
+      grid.addEventListener('touchstart', e => {
+        touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
+      }, { passive: true });
+      grid.addEventListener('touchend', e => {
+        if (touchX === null || !isMobileView()) return;
+        const dx = e.changedTouches[0].clientX - touchX;
+        const dy = e.changedTouches[0].clientY - touchY;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          stepMobileDay(dx < 0 ? 1 : -1);
+        }
+        touchX = null;
+      }, { passive: true });
     });
 
     function printModalTable() {
@@ -1949,6 +2557,16 @@
     function toggleSidebar(open) {
       const sidebar = document.getElementById('taskSidebar');
       const burger = document.getElementById('btnHamburger');
+
+      // On phones the form is a sheet that slides up from the bottom.
+      if (isMobileView()) {
+        document.body.classList.toggle('sheet-open', !!open);
+        if (open) {
+          const mobileDate = selectedMobileDay();
+          if (mobileDate) document.getElementById('inputDate').value = mobileDate;
+        }
+        return;
+      }
 
       if (open) {
         sidebar.classList.remove('collapsed');
@@ -2433,7 +3051,7 @@
 
           row.innerHTML = `
             <td class="col-time">
-              <b>${t.date}</b><br>
+              <b>${friendlyDate(t.date)}</b><br>
               <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${fmtTime(t.time)}</span>
             </td>
             <td class="col-task">
@@ -2487,7 +3105,7 @@
         const row = document.createElement('tr');
         row.innerHTML = `
           <td class="col-time">
-            <b>${t.date}</b><br>
+            <b>${friendlyDate(t.date)}</b><br>
             <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${fmtTime(t.time)}</span>
           </td>
           <td>${dayName}</td>
@@ -2587,6 +3205,7 @@
       document.getElementById('inputLocation').value = '';
       document.getElementById('inputDuration').value = '1 hour';
       toggleCustomDuration();
+      if (isMobileView()) toggleSidebar(false);
 
       await refreshMetricsAndTasks();
     }
