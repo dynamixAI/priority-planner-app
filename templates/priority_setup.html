@@ -297,6 +297,42 @@
         </label>
       </div>
 
+      <div class="section-title">Time Format</div>
+      <div class="radio-row">
+        <label>
+          <input type="radio" name="time_format" value="24h"
+            {% if time_format != '12h' %}checked{% endif %}>
+          24-hour (14:30)
+        </label>
+        <label>
+          <input type="radio" name="time_format" value="12h"
+            {% if time_format == '12h' %}checked{% endif %}>
+          12-hour (2:30 PM)
+        </label>
+      </div>
+
+      <div class="section-title">Timezone</div>
+      <div style="display:flex; align-items:center; gap:0.5rem;
+                  margin-bottom:0.4rem; flex-wrap:wrap;">
+        <select name="timezone" id="timezoneSelect"
+          style="flex:1; min-width:200px; padding:0.45rem;
+                 border-radius:6px; border:1px solid var(--border);
+                 background:var(--input-bg); color:var(--text);">
+          {% for tz in timezones %}
+          <option value="{{ tz }}"
+            {% if tz == user_timezone %}selected{% endif %}>
+            {{ tz.replace('_', ' ') }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="preset-btn"
+          onclick="useDeviceTimezone()">Use this device's timezone</button>
+      </div>
+      <p style="font-size:0.78rem; color:var(--subtext);
+                margin:0 0 1.25rem 0;">
+        Used to decide when a task is due, when it becomes missed
+        at midnight, and when reminders are sent.
+      </p>
+
       <div class="section-title">Overdue Behaviour</div>
       <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
         <label style="margin:0; font-size:0.85rem; font-weight:600; color:var(--text);">Flag a task as overdue after</label>
@@ -359,6 +395,22 @@
   </div>
 
   <script>
+    function useDeviceTimezone() {
+      const msg = "Couldn't match this device's timezone. "
+        + "Please pick it from the list.";
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const sel = document.getElementById('timezoneSelect');
+        if (tz && [...sel.options].some(o => o.value === tz)) {
+          sel.value = tz;
+        } else {
+          alert(msg);
+        }
+      } catch (e) {
+        alert(msg);
+      }
+    }
+
     const savedTheme = localStorage.getItem('planner-theme');
     if (savedTheme) {
       document.documentElement.setAttribute('data-theme', savedTheme);

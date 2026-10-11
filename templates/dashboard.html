@@ -735,7 +735,7 @@
 
     <div class="form-group">
       <label>2. Start Time</label>
-      <input type="time" id="inputTime" value="09:00" onclick="this.showPicker()">
+      <select id="inputTime" class="time-select"></select>
     </div>
 
     <div class="form-group">
@@ -1073,7 +1073,7 @@
 
       <div class="form-group">
         <label>New Start Time</label>
-        <input type="time" id="rescheduleTime" value="09:00" onclick="this.showPicker()">
+        <select id="rescheduleTime" class="time-select"></select>
       </div>
 
       <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
@@ -1093,6 +1093,8 @@
     let currentWeekTasks = {{ tasks|tojson }};
     const allPriorities = {{ priorities|tojson }};
     const gridOrientation = {{ grid_orientation|tojson }};
+    const TIME_FORMAT = {{ time_format|tojson }};
+    const USER_TZ = {{ user_timezone|tojson }};
     let weekDatesIso = {{ week_dates_iso|tojson }};
     const HOUR_PX_V = 75;
     const HOUR_PX_H = 130;
@@ -1124,6 +1126,61 @@
       return h * 60 + (m || 0);
     }
 
+    // Show a stored "HH:MM" time in the user's chosen format.
+    // Times are always STORED as 24-hour; this only changes display.
+    function fmtTime(hhmm) {
+      if (!hhmm || TIME_FORMAT !== '12h') return hhmm;
+      const [h, m] = hhmm.split(':').map(Number);
+      const suffix = h < 12 ? 'AM' : 'PM';
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      return h12 + ':' + String(m || 0).padStart(2, '0') + ' ' + suffix;
+    }
+
+    // Current wall-clock time in the user's timezone, as a Date whose
+    // local fields match that clock. Task times are the user's own
+    // local times, so overdue checks must use THEIR clock.
+    function nowInUserTz() {
+      try {
+        const fmt = new Intl.DateTimeFormat('en-GB', {
+          timeZone: USER_TZ, hourCycle: 'h23',
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+        const p = Object.fromEntries(
+          fmt.formatToParts(new Date()).map(x => [x.type, x.value])
+        );
+        return new Date(p.year + '-' + p.month + '-' + p.day + 'T'
+          + p.hour + ':' + p.minute + ':' + p.second);
+      } catch (e) {
+        return new Date();
+      }
+    }
+
+    // Start-time dropdown in 5-minute steps, labelled in the user's
+    // format. The browser's own time picker ignores the setting.
+    function buildTimeSelect(sel) {
+      sel.innerHTML = '';
+      for (let mins = 0; mins < 24 * 60; mins += 5) {
+        const opt = document.createElement('option');
+        opt.value = minutesToTimeStr(mins);
+        opt.textContent = fmtTime(opt.value);
+        sel.appendChild(opt);
+      }
+    }
+
+    function setTimeSelect(sel, hhmm) {
+      hhmm = hhmm || '09:00';
+      if (![...sel.options].some(o => o.value === hhmm)) {
+        // Off-grid time (e.g. an older task at 09:07): keep it exactly.
+        const opt = document.createElement('option');
+        opt.value = hhmm;
+        opt.textContent = fmtTime(hhmm);
+        const after = [...sel.options].find(o => o.value > hhmm);
+        sel.insertBefore(opt, after || null);
+      }
+      sel.value = hhmm;
+    }
+
     function minutesToTimeStr(mins) {
       const h = Math.floor(mins / 60) % 24;
       const m = mins % 60;
@@ -1149,7 +1206,7 @@
         textColor === '#0f172a' ? 'dark-text' : ''
       ].join(' ').trim();
 
-      const timeLabel = `${task.time} – ${minutesToTimeStr(r.end)}`;
+      const timeLabel = `${fmtTime(task.time)} – ${fmtTime(minutesToTimeStr(r.end))}`;
       const { lane, laneCount } = laneInfo;
       let posStyle;
       if (gridOrientation === 'day_rows') {
@@ -1274,7 +1331,7 @@
       if (!overlap) return true;
       const r = taskRangeMinutes(overlap);
       const keepAnyway = await appConfirm(
-        `This overlaps with "${overlap.title}" (${overlap.time} – ${minutesToTimeStr(r.end)}). Keep it anyway, or change the time?`,
+        `This overlaps with "${overlap.title}" (${fmtTime(overlap.time)} – ${fmtTime(minutesToTimeStr(r.end))}). Keep it anyway, or change the time?`,
         "Keep Anyway", "Change Time"
       );
       return keepAnyway;
@@ -1330,7 +1387,7 @@
           const tr = document.createElement('tr');
           const timeTd = document.createElement('td');
           timeTd.className = 'time-col';
-          timeTd.innerText = slot;
+          timeTd.innerText = fmtTime(slot);
           timeTd.style.height = HOUR_PX_V + 'px';
           tr.appendChild(timeTd);
 
@@ -1358,7 +1415,7 @@
 
       timeSlots.forEach(slot => {
         const th = document.createElement('th');
-        th.innerText = slot;
+        th.innerText = fmtTime(slot);
         th.style.width = HOUR_PX_H + 'px';
         headRow.appendChild(th);
       });
@@ -1466,7 +1523,7 @@
     });
 
     function initReconciliation() {
-      const now = new Date();
+      const now = nowInUserTz();
 
       const overduePending = allUserTasks.filter(t => {
         if (t.status !== 'pending') return false;
@@ -1502,7 +1559,7 @@
         item.className = 'reconcile-item';
         item.innerHTML = `
           <div>
-            <b>${t.title}</b> &nbsp;•&nbsp; <small style="color: var(--metric-muted);">${t.date} at ${t.time}</small>
+            <b>${t.title}</b> &nbsp;•&nbsp; <small style="color: var(--metric-muted);">${t.date} at ${fmtTime(t.time)}</small>
           </div>
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #16a34a;" onclick="resolveReconciliation(${t.id}, 'completed')">Done On Time</button>
@@ -1519,7 +1576,7 @@
         item.className = 'reconcile-item';
         item.innerHTML = `
           <div>
-            <b>${t.title}</b> &nbsp;•&nbsp; <small style="color: #ef4444;">Missed — ${t.date} at ${t.time}</small>
+            <b>${t.title}</b> &nbsp;•&nbsp; <small style="color: #ef4444;">Missed — ${t.date} at ${fmtTime(t.time)}</small>
           </div>
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #ea580c;" onclick="openRescheduleModal(${t.id})">Reschedule</button>
@@ -1645,6 +1702,11 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      ['inputTime', 'rescheduleTime'].forEach(id => {
+        const sel = document.getElementById(id);
+        buildTimeSelect(sel);
+        setTimeSelect(sel, '09:00');
+      });
       renderGrid();
       initReconciliation();
     });
@@ -1969,7 +2031,7 @@
         </div>
         <div class="detail-row">
           <b>Date & Time</b>
-          <div>${task.date} &nbsp;•&nbsp; ${task.time} – ${endLabel}</div>
+          <div>${task.date} &nbsp;•&nbsp; ${fmtTime(task.time)} – ${fmtTime(endLabel)}</div>
         </div>
         <div class="detail-row">
           <b>Priority Level</b>
@@ -2063,7 +2125,7 @@
 
       document.getElementById('rescheduleTaskId').value = taskId;
       document.getElementById('rescheduleDate').value = task.date || "{{ cur_week_str }}";
-      document.getElementById('rescheduleTime').value = task.time || "09:00";
+      setTimeSelect(document.getElementById('rescheduleTime'), task.time || "09:00");
 
       const titleEl = document.getElementById('rescheduleHeaderTitle');
       const subtitleEl = document.getElementById('rescheduleSubtitle');
@@ -2169,7 +2231,7 @@
           row.innerHTML = `
             <td class="col-time">
               <b>${t.date}</b><br>
-              <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${t.time}</span>
+              <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${fmtTime(t.time)}</span>
             </td>
             <td class="col-task">
               <b style="color: var(--text);">${t.title}</b>
@@ -2223,7 +2285,7 @@
         row.innerHTML = `
           <td class="col-time">
             <b>${t.date}</b><br>
-            <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${t.time}</span>
+            <span style="font-size: 0.72rem; color: var(--metric-muted);">🕒 ${fmtTime(t.time)}</span>
           </td>
           <td>${dayName}</td>
           <td class="col-task">

@@ -6,6 +6,7 @@ import hashlib
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, available_timezones
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_from_directory
 from flask_wtf import CSRFProtect
@@ -41,6 +42,32 @@ DEFAULT_PRIORITIES = [
 ]
 
 TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
+
+DEFAULT_TIMEZONE = "Europe/London"
+DEFAULT_TIME_FORMAT = "24h"
+VALID_TIME_FORMATS = ("12h", "24h")
+# Region/City names only (e.g. Europe/London) plus UTC — skips legacy aliases.
+VALID_TIMEZONES = sorted(
+    tz for tz in available_timezones()
+    if "/" in tz and not tz.startswith(("Etc/", "SystemV/", "US/", "posix/", "right/"))
+) + ["UTC"]
+
+
+def clean_timezone(tz_name):
+    return tz_name if tz_name in VALID_TIMEZONES else DEFAULT_TIMEZONE
+
+
+def user_now(tz_name):
+    """The current wall-clock time in the user's own timezone, as a naive
+    datetime. Task dates/times are stored as the user's local wall-clock
+    values, so every "has this happened yet?" check must compare against the
+    user's local time — not the server's (Render runs on UTC, which is an
+    hour behind the UK during British Summer Time)."""
+    try:
+        tz = ZoneInfo(tz_name or DEFAULT_TIMEZONE)
+    except Exception:
+        tz = ZoneInfo(DEFAULT_TIMEZONE)
+    return datetime.now(tz).replace(tzinfo=None)
 DEFAULT_ACTIVE_DAYS = ["0", "1", "2", "3", "4", "5", "6"]
 
 
@@ -88,6 +115,16 @@ def send_reset_email(to_email, reset_link):
         server.sendmail(sender_email, [to_email], msg.as_string())
 
 
+def format_time(hhmm, time_format):
+    """'14:30' -> '2:30 PM' for 12-hour users; unchanged for 24-hour users."""
+    if time_format != "12h":
+        return hhmm
+    try:
+        return datetime.strptime(hhmm, "%H:%M").strftime("%I:%M %p").lstrip("0")
+    except ValueError:
+        return hhmm
+
+
 def seed_default_priorities(conn, user_id):
     for i, p in enumerate(DEFAULT_PRIORITIES):
         conn.execute(
@@ -114,7 +151,9 @@ def init_db():
             overdue_threshold_days INTEGER DEFAULT 14,
             reset_token TEXT,
             reset_token_expiry REAL DEFAULT 0,
-            grid_orientation TEXT DEFAULT 'time_rows'
+            grid_orientation TEXT DEFAULT 'time_rows',
+            time_format TEXT DEFAULT '24h',
+            timezone TEXT DEFAULT 'Europe/London'
         );
     """)
     # Guarded migrations for databases created before these columns existed —
@@ -127,6 +166,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN grid_orientation TEXT DEFAULT 'time_rows';",
         "ALTER TABLE users ADD COLUMN terms_accepted_at REAL DEFAULT 0;",
         "ALTER TABLE users ADD COLUMN marketing_opt_in INTEGER DEFAULT 0;",
+        "ALTER TABLE users ADD COLUMN time_format TEXT DEFAULT '24h';",
+        "ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'Europe/London';",
     ]:
         try:
             conn.execute(stmt)
@@ -235,6 +276,8 @@ def register():
         confirm_password = request.form.get("confirm_password", "")
         agree_terms = request.form.get("agree_terms")
         marketing_opt_in = 1 if request.form.get("marketing_opt_in") else 0
+        # Filled in by the browser on the sign-up page; falls back to UK time.
+        user_tz = clean_timezone(request.form.get("timezone", ""))
 
         if not username or not email or not password or not confirm_password:
             flash("All fields are required.", "error")
@@ -254,8 +297,8 @@ def register():
 
         hashed = generate_password_hash(password)
         conn.execute(
-            "INSERT INTO users (username, email, password_hash, theme, week_start, active_days, failed_attempts, lock_until, is_permanently_locked, terms_accepted_at, marketing_opt_in) VALUES (?, ?, ?, 'light', 'sunday', ?, 0, 0, 0, ?, ?)",
-            (username, email, hashed, json.dumps(DEFAULT_ACTIVE_DAYS), time.time(), marketing_opt_in)
+            "INSERT INTO users (username, email, password_hash, theme, week_start, active_days, failed_attempts, lock_until, is_permanently_locked, terms_accepted_at, marketing_opt_in, time_format, timezone) VALUES (?, ?, ?, 'light', 'sunday', ?, 0, 0, 0, ?, ?, ?, ?)",
+            (username, email, hashed, json.dumps(DEFAULT_ACTIVE_DAYS), time.time(), marketing_opt_in, DEFAULT_TIME_FORMAT, user_tz)
         )
         conn.commit()
 
@@ -445,6 +488,11 @@ def priority_setup():
         if grid_orientation not in ("time_rows", "day_rows"):
             grid_orientation = "time_rows"
 
+        time_format = request.form.get("time_format", DEFAULT_TIME_FORMAT)
+        if time_format not in VALID_TIME_FORMATS:
+            time_format = DEFAULT_TIME_FORMAT
+        user_tz = clean_timezone(request.form.get("timezone", ""))
+
         # Guard: a stale or empty form submission must never wipe existing tiers.
         if not any(label.strip() for label in labels):
             flash("No priority tiers were submitted — nothing was changed. Refresh the page and try again.", "error")
@@ -474,8 +522,8 @@ def priority_setup():
             conn.execute("UPDATE priorities SET is_active = 0 WHERE id = ? AND user_id = ?", (rid, user_id))
 
         conn.execute(
-            "UPDATE users SET week_start = ?, active_days = ?, overdue_threshold_days = ?, grid_orientation = ? WHERE id = ?",
-            (week_start, json.dumps(active_days), overdue_threshold_days, grid_orientation, user_id)
+            "UPDATE users SET week_start = ?, active_days = ?, overdue_threshold_days = ?, grid_orientation = ?, time_format = ?, timezone = ? WHERE id = ?",
+            (week_start, json.dumps(active_days), overdue_threshold_days, grid_orientation, time_format, user_tz, user_id)
         )
         conn.commit()
 
@@ -485,11 +533,13 @@ def priority_setup():
 
         return redirect(url_for("dashboard"))
 
-    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation FROM users WHERE id = ?", (user_id,))
+    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation, time_format, timezone FROM users WHERE id = ?", (user_id,))
     priorities = fetch_all(
         conn, "SELECT * FROM priorities WHERE user_id = ? AND is_active = 1 ORDER BY sort_order ASC", (user_id,)
     )
     theme = user["theme"] if user and user["theme"] else "light"
+    time_format = user.get("time_format") if user and user.get("time_format") in VALID_TIME_FORMATS else DEFAULT_TIME_FORMAT
+    user_tz = clean_timezone(user.get("timezone") if user else "")
     week_start = user["week_start"] if user and user["week_start"] else "sunday"
     active_days = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
     overdue_threshold_days = user["overdue_threshold_days"] if user and user["overdue_threshold_days"] else 14
@@ -498,7 +548,8 @@ def priority_setup():
     return render_template(
         "priority_setup.html", priorities=priorities, theme=theme, week_start=week_start,
         active_days=active_days, overdue_threshold_days=overdue_threshold_days,
-        grid_orientation=grid_orientation
+        grid_orientation=grid_orientation, time_format=time_format,
+        user_timezone=user_tz, timezones=VALID_TIMEZONES
     )
 
 
@@ -511,19 +562,25 @@ def dashboard():
     week_param = request.args.get("week_start")
     conn = get_db()
 
+    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation, time_format, timezone FROM users WHERE id = ?", (user_id,))
+    user_tz = clean_timezone(user.get("timezone") if user else "")
+    time_format = user.get("time_format") if user and user.get("time_format") in VALID_TIME_FORMATS else DEFAULT_TIME_FORMAT
+    now_dt = user_now(user_tz)
+    today = now_dt.date()
+
     # Auto-missed grace window: a task stays open all day on its scheduled
     # date, even after its time slot passes — it only flips to 'missed' once
     # the calendar date itself has moved on. Runs on every dashboard load
     # since there's no background job in this setup; if you never open the
-    # app, a task won't flip until the next time you do.
-    today_str = datetime.today().date().strftime("%Y-%m-%d")
+    # app, a task won't flip until the next time you do. "Today" is the
+    # user's own date, so the flip happens at THEIR midnight.
+    today_str = today.strftime("%Y-%m-%d")
     conn.execute(
         "UPDATE tasks SET status = 'missed' WHERE user_id = ? AND status = 'pending' AND date < ?",
         (user_id, today_str)
     )
     conn.commit()
 
-    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation FROM users WHERE id = ?", (user_id,))
     priorities = fetch_all(
         conn, "SELECT * FROM priorities WHERE user_id = ? AND is_active = 1 ORDER BY sort_order ASC", (user_id,)
     )
@@ -532,7 +589,6 @@ def dashboard():
     grid_orientation = user.get("grid_orientation") if user and user.get("grid_orientation") else "time_rows"
     active_days_list = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
 
-    today = datetime.today().date()
     if week_param:
         try:
             start_date = datetime.strptime(week_param, "%Y-%m-%d").date()
@@ -575,8 +631,6 @@ def dashboard():
     missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
     undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
     replanned_tasks = sum(1 for t in all_user_tasks if t["status"] == "replanned")
-
-    now_dt = datetime.now()
 
     def is_not_yet_due(t):
         # A pending task whose scheduled time hasn't arrived yet shouldn't be
@@ -648,6 +702,8 @@ def dashboard():
         week_dates_iso=week_dates_iso,
         week_start_pref=week_start_pref,
         grid_orientation=grid_orientation,
+        time_format=time_format,
+        user_timezone=user_tz,
         active_days=active_days_list,
         prev_week=prev_week,
         next_week=next_week,
@@ -674,8 +730,9 @@ def trends():
     user_id = session["user_id"]
     conn = get_db()
 
-    user = fetch_one(conn, "SELECT theme FROM users WHERE id = ?", (user_id,))
+    user = fetch_one(conn, "SELECT theme, timezone FROM users WHERE id = ?", (user_id,))
     theme = user["theme"] if user and user["theme"] else "light"
+    user_tz = clean_timezone(user.get("timezone") if user else "")
 
     try:
         days = int(request.args.get("days", 14))
@@ -685,7 +742,7 @@ def trends():
         days = 14
 
     all_user_tasks = fetch_all(conn, "SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,))
-    today = datetime.today().date()
+    today = user_now(user_tz).date()
 
     chart_labels, chart_completed, chart_pushed, chart_missed, chart_rate = [], [], [], [], []
     for i in range(days - 1, -1, -1):
@@ -724,11 +781,11 @@ def api_tasks_week():
     week_param = request.args.get("week_start")
     conn = get_db()
 
-    user = fetch_one(conn, "SELECT week_start, active_days FROM users WHERE id = ?", (user_id,))
+    user = fetch_one(conn, "SELECT week_start, active_days, timezone FROM users WHERE id = ?", (user_id,))
     week_start_pref = user["week_start"] if user and user["week_start"] else "sunday"
     active_days_list = json.loads(user["active_days"]) if user and user["active_days"] else DEFAULT_ACTIVE_DAYS
 
-    today = datetime.today().date()
+    today = user_now(clean_timezone(user.get("timezone") if user else "")).date()
     if week_param:
         try:
             start_date = datetime.strptime(week_param, "%Y-%m-%d").date()
@@ -787,14 +844,17 @@ def api_metrics():
     user_id = session["user_id"]
     conn = get_db()
 
-    today_str = datetime.today().date().strftime("%Y-%m-%d")
+    user = fetch_one(conn, "SELECT overdue_threshold_days, timezone FROM users WHERE id = ?", (user_id,))
+    now_dt = user_now(clean_timezone(user.get("timezone") if user else ""))
+    today = now_dt.date()
+
+    today_str = today.strftime("%Y-%m-%d")
     conn.execute(
         "UPDATE tasks SET status = 'missed' WHERE user_id = ? AND status = 'pending' AND date < ?",
         (user_id, today_str)
     )
     conn.commit()
 
-    user = fetch_one(conn, "SELECT overdue_threshold_days FROM users WHERE id = ?", (user_id,))
     all_user_tasks = fetch_all(conn, "SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,))
 
     total_tasks = len(all_user_tasks)
@@ -803,9 +863,6 @@ def api_metrics():
     missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
     undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
     replanned_tasks = sum(1 for t in all_user_tasks if t["status"] == "replanned")
-
-    today = datetime.today().date()
-    now_dt = datetime.now()
 
     def is_not_yet_due(t):
         if t["status"] != "pending":
@@ -957,12 +1014,14 @@ def reschedule_task():
         # Was this task already due at the moment we're rescheduling it?
         # Only an already-overdue push counts against PUSHED/BHI — moving
         # something before it's due is a free replan, not a penalized push.
+        owner = fetch_one(conn, "SELECT timezone FROM users WHERE id = ?", (session["user_id"],))
+        now_local = user_now(clean_timezone(owner.get("timezone") if owner else ""))
         try:
             scheduled_dt = datetime.strptime(f"{task['date']} {task['time']}", "%Y-%m-%d %H:%M")
         except ValueError:
-            scheduled_dt = datetime.now()  # fail safe: treat as due if unparsable
+            scheduled_dt = now_local  # fail safe: treat as due if unparsable
 
-        is_overdue = scheduled_dt <= datetime.now()
+        is_overdue = scheduled_dt <= now_local
         original_new_status = "rescheduled" if is_overdue else "replanned"
         result_label = "pushed" if is_overdue else "replanned"
         conn.execute("UPDATE tasks SET status = ? WHERE id = ? AND user_id = ?", (original_new_status, task_id, session["user_id"]))
@@ -1145,13 +1204,20 @@ def send_reminders():
         return jsonify({"error": "Forbidden"}), 403
 
     conn = get_db()
-    now = datetime.now()
-    window_end = now + timedelta(minutes=15)
 
     # Tasks starting within the next 15 minutes, still pending, not yet reminded.
+    # Each task's time is the OWNER's local time, so "now" is worked out per
+    # user from their timezone. Only dates within a day of UTC today can be
+    # starting in the next 15 minutes anywhere in the world, so the query is
+    # limited to those instead of scanning every pending task ever created.
+    utc_today = datetime.now(ZoneInfo("UTC")).date()
     due_soon = fetch_all(
         conn,
-        "SELECT * FROM tasks WHERE status = 'pending' AND (reminder_sent = 0 OR reminder_sent IS NULL)"
+        "SELECT t.*, u.timezone AS user_timezone, u.time_format AS user_time_format "
+        "FROM tasks t JOIN users u ON u.id = t.user_id "
+        "WHERE t.status = 'pending' AND (t.reminder_sent = 0 OR t.reminder_sent IS NULL) "
+        "AND t.date BETWEEN ? AND ?",
+        ((utc_today - timedelta(days=1)).strftime("%Y-%m-%d"), (utc_today + timedelta(days=1)).strftime("%Y-%m-%d"))
     )
 
     sent_count = 0
@@ -1162,7 +1228,8 @@ def send_reminders():
             task_dt = datetime.strptime(f"{task['date']} {task['time']}", "%Y-%m-%d %H:%M")
         except ValueError:
             continue
-        if not (now <= task_dt <= window_end):
+        now = user_now(clean_timezone(task.get("user_timezone")))
+        if not (now <= task_dt <= now + timedelta(minutes=15)):
             continue
 
         checked_count += 1
@@ -1176,7 +1243,7 @@ def send_reminders():
 
         payload = json.dumps({
             "title": "Agenndar",
-            "body": f"'{task['title']}' starts at {task['time']}",
+            "body": f"'{task['title']}' starts at {format_time(task['time'], task.get('user_time_format'))}",
             "url": "/dashboard"
         })
 
