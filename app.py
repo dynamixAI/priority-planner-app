@@ -6,6 +6,7 @@ import secrets
 import hashlib
 import hmac
 import smtplib
+import threading
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, available_timezones
@@ -136,7 +137,8 @@ def send_reset_email(to_email, reset_link):
     msg["From"] = sender_email
     msg["To"] = to_email
 
-    with smtplib.SMTP(smtp_server, smtp_port) as server:
+    # A time limit, so an unreachable mail server can never hang the app.
+    with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
         server.starttls()
         server.login(smtp_login, smtp_password)
         server.sendmail(sender_email, [to_email], msg.as_string())
@@ -277,6 +279,18 @@ def fetch_attention_tasks(conn, user_id, today_str):
         LIMIT 50
     """, (user_id,))
     return open_tasks + missed
+
+
+def send_reset_email_in_background(to_email, reset_link):
+    """Send the reset email without making the request wait for it, so a
+    slow or blocked mail server can't freeze the page for everyone else.
+    Failures go to the server logs (Render's Logs tab)."""
+    def run():
+        try:
+            send_reset_email(to_email, reset_link)
+        except Exception:
+            app.logger.exception("Password reset email failed to send")
+    threading.Thread(target=run, daemon=True).start()
 
 
 def seed_default_priorities(conn, user_id):
@@ -535,14 +549,10 @@ def forgot_password():
             conn.commit()
 
             reset_link = url_for("reset_password", token=raw_token, _external=True)
-            try:
-                send_reset_email(user["email"], reset_link)
-            except Exception:
-                # The user still sees the same message either way (so this
-                # page can't reveal which emails are registered), but the
-                # real error goes to the server logs — visible in Render's
-                # Logs tab — instead of disappearing silently.
-                app.logger.exception("Password reset email failed to send")
+            # Sent in the background: the user sees the same message either
+            # way (so this page can't reveal which emails are registered),
+            # and any failure is written to Render's Logs tab.
+            send_reset_email_in_background(user["email"], reset_link)
 
         flash("If that email is on file, reset instructions have been sent.", "info")
         return redirect(url_for("login"))
@@ -1336,7 +1346,8 @@ def send_reminders():
                     },
                     data=payload,
                     vapid_private_key=VAPID_PRIVATE_KEY_FILE,
-                    vapid_claims=VAPID_CLAIMS.copy()
+                    vapid_claims=VAPID_CLAIMS.copy(),
+                    timeout=10  # never let one slow push service hang the app
                 )
                 any_delivered = True
             except WebPushException as e:
@@ -1346,6 +1357,9 @@ def send_reminders():
                 if status in (404, 410):
                     conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (sub["endpoint"],))
                     conn.commit()
+            except Exception:
+                # Timeouts and network errors: log it and try again next run.
+                app.logger.exception("Push notification failed to send")
 
         # Only tick the task off once a device actually received it. If every
         # send failed (e.g. a temporary push-service error), the next run
