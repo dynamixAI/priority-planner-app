@@ -122,6 +122,71 @@
     }
     .btn-close-drawer:hover { background: var(--slot-hover); color: #ef4444; }
 
+    /* Phone-style scroll-wheel time picker */
+    .time-wheel {
+      --row: 34px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      gap: 0.25rem;
+      height: calc(var(--row) * 5);
+      padding: 0 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--card-bg);
+      overflow: hidden;
+      user-select: none;
+    }
+    .time-wheel::before {
+      content: "";
+      position: absolute;
+      left: 0.5rem; right: 0.5rem;
+      top: calc(var(--row) * 2);
+      height: var(--row);
+      border-radius: 8px;
+      background: var(--slot-hover);
+      pointer-events: none;
+    }
+    .wheel-col {
+      position: relative;
+      flex: 0 0 3.2rem;
+      height: 100%;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      scrollbar-width: none;
+      padding: calc(var(--row) * 2) 0;
+      outline: none;
+      -webkit-mask-image: linear-gradient(transparent, #000 35%,
+        #000 65%, transparent);
+      mask-image: linear-gradient(transparent, #000 35%,
+        #000 65%, transparent);
+    }
+    .wheel-col::-webkit-scrollbar { display: none; }
+    .wheel-col:focus-visible .wheel-item.selected { color: var(--primary); }
+    .wheel-item {
+      height: var(--row);
+      line-height: var(--row);
+      text-align: center;
+      scroll-snap-align: center;
+      font-size: 1rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--metric-muted);
+      cursor: pointer;
+      transition: color 0.15s, font-size 0.15s;
+    }
+    .wheel-item.selected {
+      color: var(--text);
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    .wheel-sep {
+      position: relative;
+      align-self: center;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
     .form-group { margin-bottom: 0.85rem; }
     .form-group label {
       display: block;
@@ -735,7 +800,8 @@
 
     <div class="form-group">
       <label>2. Start Time</label>
-      <select id="inputTime" class="time-select"></select>
+      <div class="time-wheel" data-for="inputTime"></div>
+        <input type="hidden" id="inputTime" value="09:00">
     </div>
 
     <div class="form-group">
@@ -1073,7 +1139,8 @@
 
       <div class="form-group">
         <label>New Start Time</label>
-        <select id="rescheduleTime" class="time-select"></select>
+        <div class="time-wheel" data-for="rescheduleTime"></div>
+        <input type="hidden" id="rescheduleTime" value="09:00">
       </div>
 
       <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
@@ -1156,29 +1223,110 @@
       }
     }
 
-    // Start-time dropdown in 5-minute steps, labelled in the user's
-    // format. The browser's own time picker ignores the setting.
-    function buildTimeSelect(sel) {
-      sel.innerHTML = '';
-      for (let mins = 0; mins < 24 * 60; mins += 5) {
-        const opt = document.createElement('option');
-        opt.value = minutesToTimeStr(mins);
-        opt.textContent = fmtTime(opt.value);
-        sel.appendChild(opt);
+    // Phone-style scroll-wheel time picker. Each wheel writes its value
+    // ("HH:MM", always 24-hour) into a hidden <input>, so the rest of the
+    // code reads the time exactly as before. Every minute is available.
+    const timeWheels = {};
+
+    function buildTimeSelect(input) {
+      const wrap = document.querySelector(
+        '.time-wheel[data-for="' + input.id + '"]');
+      wrap.innerHTML = '';
+      const twelve = TIME_FORMAT === '12h';
+      const pad = n => String(n).padStart(2, '0');
+      const nums = (a, b) => Array.from({length: b - a + 1}, (_, i) => a + i);
+
+      function makeCol(values, label, ariaLabel) {
+        const col = document.createElement('div');
+        col.className = 'wheel-col';
+        col.tabIndex = 0;
+        col.setAttribute('role', 'listbox');
+        col.setAttribute('aria-label', ariaLabel);
+        values.forEach((v, i) => {
+          const item = document.createElement('div');
+          item.className = 'wheel-item';
+          item.textContent = label(v);
+          item.onclick = () => scrollToIndex(col, i, true);
+          col.appendChild(item);
+        });
+        col.values = values;
+        col.index = 0;
+        let timer;
+        col.addEventListener('scroll', () => {
+          markSelected(col, indexFromScroll(col));
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            col.index = indexFromScroll(col);
+            writeValue();
+          }, 90);
+        });
+        col.addEventListener('keydown', e => {
+          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+          e.preventDefault();
+          scrollToIndex(col, col.index + (e.key === 'ArrowUp' ? -1 : 1), true);
+        });
+        wrap.appendChild(col);
+        return col;
       }
+
+      function rowHeight(col) {
+        return col.firstChild ? col.firstChild.offsetHeight || 34 : 34;
+      }
+      function indexFromScroll(col) {
+        const i = Math.round(col.scrollTop / rowHeight(col));
+        return Math.max(0, Math.min(col.values.length - 1, i));
+      }
+      function markSelected(col, i) {
+        [...col.children].forEach((el, j) =>
+          el.classList.toggle('selected', j === i));
+      }
+      function scrollToIndex(col, i, smooth) {
+        i = Math.max(0, Math.min(col.values.length - 1, i));
+        col.index = i;
+        markSelected(col, i);
+        col.scrollTo({ top: i * rowHeight(col),
+                       behavior: smooth ? 'smooth' : 'auto' });
+        writeValue();
+      }
+
+      const hourCol = twelve
+        ? makeCol(nums(1, 12), String, 'Hour')
+        : makeCol(nums(0, 23), pad, 'Hour');
+      const sep = document.createElement('div');
+      sep.className = 'wheel-sep';
+      sep.textContent = ':';
+      wrap.insertBefore(sep, null);
+      const minCol = makeCol(nums(0, 59), pad, 'Minute');
+      const apCol = twelve ? makeCol(['AM', 'PM'], String, 'AM or PM') : null;
+
+      function writeValue() {
+        let h = hourCol.values[hourCol.index];
+        if (twelve) {
+          h = h % 12 + (apCol.values[apCol.index] === 'PM' ? 12 : 0);
+        }
+        input.value = pad(h) + ':' + pad(minCol.values[minCol.index]);
+      }
+
+      function show(hhmm) {
+        const [h, m] = (hhmm || '09:00').split(':').map(Number);
+        const hourIndex = twelve ? (h % 12 === 0 ? 12 : h % 12) - 1 : h;
+        scrollToIndex(hourCol, hourIndex, false);
+        scrollToIndex(minCol, m || 0, false);
+        if (apCol) scrollToIndex(apCol, h < 12 ? 0 : 1, false);
+      }
+
+      // A wheel inside a hidden panel can't be scrolled into place, so
+      // re-apply the current value whenever the wheel becomes visible.
+      new ResizeObserver(() => {
+        if (wrap.offsetHeight) show(input.value);
+      }).observe(wrap);
+
+      timeWheels[input.id] = show;
     }
 
-    function setTimeSelect(sel, hhmm) {
-      hhmm = hhmm || '09:00';
-      if (![...sel.options].some(o => o.value === hhmm)) {
-        // Off-grid time (e.g. an older task at 09:07): keep it exactly.
-        const opt = document.createElement('option');
-        opt.value = hhmm;
-        opt.textContent = fmtTime(hhmm);
-        const after = [...sel.options].find(o => o.value > hhmm);
-        sel.insertBefore(opt, after || null);
-      }
-      sel.value = hhmm;
+    function setTimeSelect(input, hhmm) {
+      input.value = hhmm || '09:00';
+      if (timeWheels[input.id]) timeWheels[input.id](input.value);
     }
 
     function minutesToTimeStr(mins) {
