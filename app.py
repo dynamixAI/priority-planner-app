@@ -125,7 +125,6 @@ def init_db():
         "ALTER TABLE users ADD COLUMN reset_token TEXT;",
         "ALTER TABLE users ADD COLUMN reset_token_expiry REAL DEFAULT 0;",
         "ALTER TABLE users ADD COLUMN grid_orientation TEXT DEFAULT 'time_rows';",
-        "ALTER TABLE tasks ADD COLUMN reminder_sent INTEGER DEFAULT 0;",
         "ALTER TABLE users ADD COLUMN terms_accepted_at REAL DEFAULT 0;",
         "ALTER TABLE users ADD COLUMN marketing_opt_in INTEGER DEFAULT 0;",
     ]:
@@ -171,11 +170,25 @@ def init_db():
             priority_id INTEGER,
             status TEXT DEFAULT 'pending',
             origin_id INTEGER,
+            reminder_sent INTEGER DEFAULT 0,
+            followup_dismissed INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (priority_id) REFERENCES priorities(id),
             FOREIGN KEY (origin_id) REFERENCES tasks(id)
         );
     """)
+    # Guarded task-column migrations for databases created before these
+    # columns existed. They must run AFTER the CREATE TABLE above — on a
+    # brand-new database the tasks table doesn't exist until then.
+    for stmt in [
+        "ALTER TABLE tasks ADD COLUMN reminder_sent INTEGER DEFAULT 0;",
+        "ALTER TABLE tasks ADD COLUMN followup_dismissed INTEGER DEFAULT 0;",
+    ]:
+        try:
+            conn.execute(stmt)
+            conn.commit()
+        except Exception:
+            pass
     # One-time migration for databases created before duration_minutes existed:
     # add the column (no default, so existing rows land as NULL), then backfill
     # from the old text durations. The UPDATE only touches NULL rows, so it's
@@ -927,6 +940,17 @@ def reschedule_task():
     if task["status"] == "missed":
         # A miss is permanent — rescheduling creates a fresh follow-up task,
         # it does NOT undo or soften the original miss's BHI penalty.
+        # Each missed task gets at most ONE follow-up: any later task in the
+        # same chain means it has already been rescheduled.
+        existing_followup = fetch_one(
+            conn,
+            "SELECT id FROM tasks WHERE user_id = ? AND origin_id = ? AND id > ?",
+            (session["user_id"], origin, task["id"])
+        )
+        if existing_followup:
+            return jsonify({"error": "This missed task already has a follow-up scheduled."}), 400
+        if task.get("followup_dismissed"):
+            return jsonify({"error": "You chose not to reschedule this task."}), 400
         result_label = "missed_kept"
         # leave the original row's status untouched — it stays 'missed'
     else:
@@ -950,6 +974,31 @@ def reschedule_task():
     )
     conn.commit()
     return jsonify({"status": "success", "result": result_label})
+
+
+@app.route("/api/task/dismiss-followup", methods=["POST"])
+def dismiss_followup():
+    # The user chose NOT to reschedule a missed task. Remember that choice so
+    # the catch-up banner stops asking about it. The task stays 'missed' — the
+    # BHI penalty is permanent either way.
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    task_id = data.get("task_id")
+
+    conn = get_db()
+    task = fetch_one(conn, "SELECT * FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
+    if not task:
+        return jsonify({"error": "Not found"}), 404
+    if task["status"] != "missed":
+        return jsonify({"error": "Only missed tasks can be dismissed."}), 400
+
+    conn.execute(
+        "UPDATE tasks SET followup_dismissed = 1 WHERE id = ? AND user_id = ?",
+        (task_id, session["user_id"])
+    )
+    conn.commit()
+    return jsonify({"status": "success"})
 
 
 @app.route("/api/task/delete", methods=["POST"])

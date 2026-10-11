@@ -1475,11 +1475,17 @@
       });
 
       function chainRoot(t) { return t.origin_id || t.id; }
+      // A missed task counts as handled once ANY later task exists in its
+      // chain (pending, done, pushed or missed again), or once the user has
+      // chosen not to reschedule it. Otherwise completing the follow-up would
+      // bring the original miss back into the banner.
       function hasFollowUp(t) {
         const root = chainRoot(t);
-        return allUserTasks.some(x => x.status === 'pending' && x.origin_id === root);
+        return allUserTasks.some(x => x.origin_id === root && x.id > t.id);
       }
-      const needsRescheduling = allUserTasks.filter(t => t.status === 'missed' && !hasFollowUp(t));
+      const needsRescheduling = allUserTasks.filter(
+        t => t.status === 'missed' && !t.followup_dismissed && !hasFollowUp(t)
+      );
 
       const banner = document.getElementById('reconcileBanner');
       const list = document.getElementById('reconcileList');
@@ -1517,7 +1523,7 @@
           </div>
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #ea580c;" onclick="openRescheduleModal(${t.id})">Reschedule</button>
-            <button class="btn-rec" style="color: var(--metric-muted);" onclick="this.closest('.reconcile-item').remove(); if(!document.getElementById('reconcileList').children.length){document.getElementById('reconcileBanner').style.display='none';}">Cancel</button>
+            <button class="btn-rec" style="color: var(--metric-muted);" onclick="dismissFollowup(${t.id}, this)">Don't Reschedule</button>
           </div>
         `;
         list.appendChild(item);
@@ -1596,6 +1602,25 @@
     }
 
     let pendingMissedReload = false;
+
+    async function dismissFollowup(taskId, btn) {
+      const res = await fetch('/api/task/dismiss-followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ task_id: taskId })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        await appAlert(err.error || "Couldn't dismiss this task. Please try again.");
+        return;
+      }
+      const task = allUserTasks.find(t => t.id === taskId);
+      if (task) task.followup_dismissed = 1;
+      btn.closest('.reconcile-item').remove();
+      if (!document.getElementById('reconcileList').children.length) {
+        document.getElementById('reconcileBanner').style.display = 'none';
+      }
+    }
 
     async function resolveReconciliation(taskId, newStatus) {
       const res = await fetch('/api/task/status', {
