@@ -1315,10 +1315,9 @@ def send_reminders():
         checked_count += 1
         subs = fetch_all(conn, "SELECT * FROM push_subscriptions WHERE user_id = ?", (task["user_id"],))
         if not subs:
-            # No device subscribed for this user — still mark as sent so we
-            # don't keep rechecking it every run for the rest of its window.
-            conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?", (task["id"],))
-            conn.commit()
+            # No device has notifications turned on yet. Leave the task
+            # unreminded so a later run can still deliver it if the user
+            # turns notifications on before the task starts.
             continue
 
         payload = json.dumps({
@@ -1348,9 +1347,12 @@ def send_reminders():
                     conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (sub["endpoint"],))
                     conn.commit()
 
-        conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?", (task["id"],))
-        conn.commit()
+        # Only tick the task off once a device actually received it. If every
+        # send failed (e.g. a temporary push-service error), the next run
+        # tries again — the 15-minute window gives it a few more chances.
         if any_delivered:
+            conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?", (task["id"],))
+            conn.commit()
             sent_count += 1
 
     return jsonify({"checked": checked_count, "sent": sent_count})
