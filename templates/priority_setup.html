@@ -326,6 +326,8 @@
         </select>
         <button type="button" class="preset-btn"
           onclick="useDeviceTimezone()">Use this device's timezone</button>
+        <span id="tzStatus" role="status"
+          style="font-size:0.8rem; width:100%;"></span>
       </div>
       <p style="font-size:0.78rem; color:var(--subtext);
                 margin:0 0 1.25rem 0;">
@@ -396,18 +398,25 @@
 
   <script>
     function useDeviceTimezone() {
-      const msg = "Couldn't match this device's timezone. "
-        + "Please pick it from the list.";
+      const sel = document.getElementById('timezoneSelect');
+      const status = document.getElementById('tzStatus');
+      let tz = '';
       try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const sel = document.getElementById('timezoneSelect');
-        if (tz && [...sel.options].some(o => o.value === tz)) {
-          sel.value = tz;
-        } else {
-          alert(msg);
-        }
-      } catch (e) {
-        alert(msg);
+        tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      } catch (e) {}
+      if (tz && [...sel.options].some(o => o.value === tz)) {
+        const was = sel.value;
+        sel.value = tz;
+        const name = tz.replace(/_/g, ' ');
+        status.style.color = '#16a34a';
+        status.textContent = (was === tz)
+          ? '\u2713 Already set to ' + name + ' (matches this device).'
+          : '\u2713 Set to ' + name + ' from this device. '
+            + 'Click Save to apply.';
+      } else {
+        status.style.color = '#ef4444';
+        status.textContent = "Couldn't detect this device's timezone. "
+          + 'Please pick it from the list.';
       }
     }
 
