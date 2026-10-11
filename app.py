@@ -51,6 +51,18 @@ TIME_SLOTS = [f"{h:02d}:00" for h in range(24)]
 LOCK_SECONDS = {5: 120, 6: 300, 7: 900}
 MAX_LOCK_SECONDS = 3600
 
+# BHI weight for a task marked "Done Late" (done on time = 1.0, pushed = 0.4).
+LATE_DONE_WEIGHT = 0.7
+
+# The only status changes a user can make directly. Everything else
+# (missed -> done, moved tasks, made-up statuses) is refused, so a miss
+# stays permanent and the score can't be edited around the app's rules.
+ALLOWED_STATUS_CHANGES = {
+    ("pending", "completed"),
+    ("pending", "missed"),
+    ("completed", "pending"),
+}
+
 
 def lock_seconds_for(attempts):
     if attempts < 5:
@@ -227,6 +239,7 @@ def init_db():
             origin_id INTEGER,
             reminder_sent INTEGER DEFAULT 0,
             followup_dismissed INTEGER DEFAULT 0,
+            completed_late INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (priority_id) REFERENCES priorities(id),
             FOREIGN KEY (origin_id) REFERENCES tasks(id)
@@ -238,6 +251,7 @@ def init_db():
     for stmt in [
         "ALTER TABLE tasks ADD COLUMN reminder_sent INTEGER DEFAULT 0;",
         "ALTER TABLE tasks ADD COLUMN followup_dismissed INTEGER DEFAULT 0;",
+        "ALTER TABLE tasks ADD COLUMN completed_late INTEGER DEFAULT 0;",
     ]:
         try:
             conn.execute(stmt)
@@ -643,6 +657,10 @@ def dashboard():
     all_user_tasks = fetch_all(conn, "SELECT * FROM tasks WHERE user_id = ? ORDER BY date ASC, time ASC", (user_id,))
     total_tasks = len(all_user_tasks)
     done_tasks = sum(1 for t in all_user_tasks if t["status"] == "completed")
+    late_done_tasks = sum(
+        1 for t in all_user_tasks
+        if t["status"] == "completed" and t.get("completed_late")
+    )
     pushed_tasks = sum(1 for t in all_user_tasks if t["status"] == "rescheduled")
     missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
     undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
@@ -691,7 +709,8 @@ def dashboard():
 
     if bhi_total > 0:
         score_raw = (
-            (done_tasks * 1.0) + (pushed_tasks * 0.4)
+            ((done_tasks - late_done_tasks) * 1.0)
+            + (late_done_tasks * LATE_DONE_WEIGHT) + (pushed_tasks * 0.4)
             - (missed_tasks * 0.6) - (overdue_flagged_tasks * 0.3)
         ) / bhi_total * 100
         bhi_score = max(0, min(100, round(score_raw, 1)))
@@ -729,6 +748,7 @@ def dashboard():
             "total_logged": total_tasks,
             "total": total_tasks,
             "done": done_tasks,
+            "done_late": late_done_tasks,
             "undone": undone_tasks,
             "pushed": pushed_tasks,
             "missed": missed_tasks,
@@ -875,6 +895,10 @@ def api_metrics():
 
     total_tasks = len(all_user_tasks)
     done_tasks = sum(1 for t in all_user_tasks if t["status"] == "completed")
+    late_done_tasks = sum(
+        1 for t in all_user_tasks
+        if t["status"] == "completed" and t.get("completed_late")
+    )
     pushed_tasks = sum(1 for t in all_user_tasks if t["status"] == "rescheduled")
     missed_tasks = sum(1 for t in all_user_tasks if t["status"] == "missed")
     undone_tasks = sum(1 for t in all_user_tasks if t["status"] == "pending")
@@ -913,7 +937,8 @@ def api_metrics():
 
     if bhi_total > 0:
         score_raw = (
-            (done_tasks * 1.0) + (pushed_tasks * 0.4)
+            ((done_tasks - late_done_tasks) * 1.0)
+            + (late_done_tasks * LATE_DONE_WEIGHT) + (pushed_tasks * 0.4)
             - (missed_tasks * 0.6) - (overdue_flagged_tasks * 0.3)
         ) / bhi_total * 100
         bhi_score = max(0, min(100, round(score_raw, 1)))
@@ -933,6 +958,7 @@ def api_metrics():
             "total_logged": total_tasks,
             "total": total_tasks,
             "done": done_tasks,
+            "done_late": late_done_tasks,
             "undone": undone_tasks,
             "pushed": pushed_tasks,
             "missed": missed_tasks,
@@ -983,8 +1009,16 @@ def update_status():
 
     if task["status"] in ("rescheduled", "replanned") and target_status == "completed":
         return jsonify({"error": "This task was moved to a new time — complete it there instead."}), 400
+    if (task["status"], target_status) not in ALLOWED_STATUS_CHANGES:
+        return jsonify({"error": "That change isn't allowed for this task."}), 400
 
-    conn.execute("UPDATE tasks SET status = ? WHERE id = ? AND user_id = ?", (target_status, task_id, session["user_id"]))
+    # "Done Late" from the catch-up banner sends late=true. Any other
+    # change (done on time, undo, missed) clears the late flag.
+    late = 1 if (target_status == "completed" and data.get("late")) else 0
+    conn.execute(
+        "UPDATE tasks SET status = ?, completed_late = ? WHERE id = ? AND user_id = ?",
+        (target_status, late, task_id, session["user_id"])
+    )
     conn.commit()
     return jsonify({"status": "success"})
 

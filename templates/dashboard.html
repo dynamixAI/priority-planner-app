@@ -520,6 +520,20 @@
     }
 
     .task-card.completed { opacity: 0.45; text-decoration: line-through; }
+    .late-tag {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 0 5px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      line-height: 1.5;
+      background: #0284c7;
+      color: #ffffff;
+      text-shadow: none;
+      vertical-align: middle;
+    }
+    .late-count { font-size: 0.75rem; font-weight: 600; color: #0284c7; }
     .task-card.rescheduled {
       opacity: 0.55;
       outline: 2px dashed #ea580c;
@@ -938,7 +952,7 @@
       <!-- 3. Done Filter -->
       <div class="metric-card interactive" onclick="openTaskModal('completed')">
         <div class="metric-label" style="color: #16a34a;">Done</div>
-        <div class="metric-num" id="metricDone" style="color: #16a34a;">{{ metrics.done }}</div>
+        <div class="metric-num" id="metricDone" style="color: #16a34a;">{{ metrics.done }}{% if metrics.done_late %}<span class="late-count"> ({{ metrics.done_late }} late)</span>{% endif %}</div>
       </div>
       <!-- 4. Undone Filter -->
       <div class="metric-card interactive" onclick="openTaskModal('pending')">
@@ -1377,7 +1391,7 @@
 
       return `
         <div class="task-card ${statusClasses}" style="${posStyle} background-color: ${prio.color}; color: ${textColor};" onclick="showTaskDetail(${task.id})">
-          <div class="card-title">${escapeHtml(task.title)}</div>
+          <div class="card-title">${escapeHtml(task.title)}${task.status === 'completed' && task.completed_late ? '<span class="late-tag">Late</span>' : ''}</div>
           <div class="card-detail">🕒 ${timeLabel}</div>
           ${task.detail ? `<div class="card-detail">${escapeHtml(task.detail)}</div>` : ''}
           ${task.location ? `<div class="card-location">${escapeHtml(task.location)}</div>` : ''}
@@ -1623,7 +1637,10 @@
     function updateMetricsDisplay(metrics) {
       document.getElementById('metricTotalLogged').innerText = metrics.total_logged;
       document.getElementById('metricMissed').innerText = metrics.missed;
-      document.getElementById('metricDone').innerText = metrics.done;
+      document.getElementById('metricDone').innerHTML = metrics.done
+        + (metrics.done_late
+          ? '<span class="late-count"> (' + metrics.done_late + ' late)</span>'
+          : '');
       document.getElementById('metricUndone').innerText = metrics.undone;
       document.getElementById('metricPushed').innerText = metrics.pushed;
 
@@ -1711,7 +1728,7 @@
           </div>
           <div class="reconcile-actions">
             <button class="btn-rec" style="color: #16a34a;" onclick="resolveReconciliation(${t.id}, 'completed')">Done On Time</button>
-            <button class="btn-rec" style="color: #0284c7;" onclick="resolveReconciliation(${t.id}, 'completed')">Done Late</button>
+            <button class="btn-rec" style="color: #0284c7;" onclick="resolveReconciliation(${t.id}, 'completed', true)">Done Late</button>
             <button class="btn-rec" style="color: #ea580c;" onclick="openRescheduleModal(${t.id})">Push</button>
             <button class="btn-rec" style="color: #ef4444;" onclick="resolveReconciliation(${t.id}, 'missed')">Missed</button>
           </div>
@@ -1827,11 +1844,11 @@
       }
     }
 
-    async function resolveReconciliation(taskId, newStatus) {
+    async function resolveReconciliation(taskId, newStatus, late) {
       const res = await fetch('/api/task/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ task_id: taskId, status: newStatus })
+        body: JSON.stringify({ task_id: taskId, status: newStatus, late: !!late })
       });
 
       if (newStatus === 'missed' && res.ok) {
@@ -2181,6 +2198,13 @@
           <b>Date & Time</b>
           <div>${task.date} &nbsp;•&nbsp; ${fmtTime(task.time)} – ${fmtTime(endLabel)}</div>
         </div>
+        ${task.status === 'completed' ? `
+        <div class="detail-row">
+          <b>Status</b>
+          <div>${task.completed_late
+            ? 'Completed late <span class="late-tag">Late</span>'
+            : 'Completed on time'}</div>
+        </div>` : ''}
         <div class="detail-row">
           <b>Priority Level</b>
           <div style="display:flex; align-items:center; gap:8px;">
@@ -2393,7 +2417,7 @@
               </span>
             </td>
             <td class="col-status">
-              <span class="status-pill status-${t.status}">${t.status}</span>
+              <span class="status-pill status-${t.status}">${t.status}</span>${t.status === 'completed' && t.completed_late ? '<span class="late-tag">Late</span>' : ''}
             </td>
             <td class="col-action">
               ${actionHtml}
