@@ -148,6 +148,71 @@
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
     .btn-outline:hover { background: var(--bg); }
+    /* ---- Agi, the guide ---- */
+    .agi { overflow: visible; display: block; }
+    .agi-body { fill: #10a3b0; stroke: #13292b; stroke-width: 3; }
+    .agi-band { fill: #0b7a85; stroke: #13292b; stroke-width: 3; }
+    .agi-ring { fill: #e9eef0; stroke: #13292b; stroke-width: 3; }
+    .agi-face { fill: #ffffff; stroke: #13292b; stroke-width: 2.5; }
+    .agi-ink { fill: #13292b; }
+    .agi-foot { fill: #0b7a85; stroke: #13292b; stroke-width: 3; }
+    .agi-glint { fill: #ffffff; }
+    .agi-cheek { fill: #ff8fa3; opacity: 0.6; }
+    .agi-smile, .agi-limb {
+      fill: none;
+      stroke: #13292b;
+      stroke-width: 4.5;
+      stroke-linecap: round;
+    }
+    .agi-hand { fill: #10a3b0; stroke: #13292b; stroke-width: 3; }
+    .agi-shadow {
+      fill: #000;
+      opacity: 0.14;
+      animation: agiShadow 2.6s ease-in-out infinite;
+    }
+    [data-theme="dark"] .agi-shadow { fill: #33d1de; opacity: 0.12; }
+    [data-theme="dark"] .agi {
+      filter: drop-shadow(0 0 1.5px rgba(230, 239, 239, 0.35));
+    }
+    .agi-bob { animation: agiBob 2.6s ease-in-out infinite; }
+    .agi-eyes { animation: agiBlink 4.2s infinite; transform-origin: 60px 78px; }
+    .agi-arm-r {
+      transform-origin: 98px 76px;
+      transform: rotate(var(--agi-aim, -35deg));
+      transition: transform 0.5s cubic-bezier(.2, .8, .2, 1);
+    }
+    .agi-arm-l { transform-origin: 24px 76px; }
+    .agi.waving .agi-arm-r { animation: agiWave 1.8s ease-in-out infinite; }
+    .agi.pointing .agi-arm-r .agi-hand {
+      animation: agiPoke 1.2s ease-in-out infinite;
+    }
+    @keyframes agiBob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    @keyframes agiShadow {
+      0%, 100% { transform: scaleX(1); transform-origin: 60px 134px; }
+      50% { transform: scaleX(0.85); transform-origin: 60px 134px; }
+    }
+    @keyframes agiBlink {
+      0%, 90%, 100% { transform: scaleY(1); }
+      94% { transform: scaleY(0.1); }
+    }
+    @keyframes agiWave {
+      0%, 100% { transform: rotate(-60deg); }
+      50% { transform: rotate(-20deg); }
+    }
+    @keyframes agiPoke {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(3px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .agi-bob, .agi-shadow, .agi-eyes, .agi.waving .agi-arm-r,
+      .agi.pointing .agi-arm-r .agi-hand { animation: none; }
+    }
+    /* Agi floats as a whole via .agi-bob, so the page's own float is off. */
+    .agi.buddy-float { animation: none; }
+    .paused .agi * { animation-play-state: paused !important; }
   </style>
 </head>
 <body>
@@ -155,18 +220,36 @@
     <div class="kicker">Agenndar</div>
     <div class="stage" id="stage">
       <svg viewBox="0 0 260 200" width="100%" height="100%">
-        <!-- Humanoid buddy: head, body, two arms, two legs -->
-        <g class="buddy-float">
-          <line x1="122" y1="160" x2="116" y2="186" stroke="var(--primary)" stroke-width="7" stroke-linecap="round"/>
-          <line x1="138" y1="160" x2="144" y2="186" stroke="var(--primary)" stroke-width="7" stroke-linecap="round"/>
-          <rect x="110" y="115" width="40" height="48" rx="18" fill="var(--primary)" opacity="0.9"/>
-          <path d="M 148 122 Q 164 132 168 150" stroke="var(--primary)" stroke-width="7" fill="none" stroke-linecap="round"/>
-          <path class="arm-wave" d="M 112 122 Q 96 112 90 94" stroke="var(--primary)" stroke-width="7" fill="none" stroke-linecap="round"/>
-          <circle cx="130" cy="95" r="22" fill="var(--primary)" opacity="0.9"/>
-          <circle cx="122" cy="92" r="3.2" fill="var(--card-bg)" class="blink"/>
-          <circle cx="138" cy="92" r="3.2" fill="var(--card-bg)" class="blink"/>
-          <path d="M 120 104 Q 130 111 140 104" stroke="var(--card-bg)" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <!-- Agi, the Agenndar guide (original artwork) -->
+        <svg class="agi waving buddy-float" x="78" y="36" width="104" height="121" viewBox="0 0 120 140" aria-hidden="true" focusable="false">
+        <ellipse class="agi-shadow" cx="60" cy="134" rx="26" ry="4"/>
+        <g class="agi-bob">
+        <ellipse class="agi-foot" cx="45" cy="121" rx="10" ry="6"/>
+        <ellipse class="agi-foot" cx="75" cy="121" rx="10" ry="6"/>
+        <g class="agi-arm-l">
+        <path class="agi-limb" d="M24 76 Q10 82 9 96"/>
+        <circle class="agi-hand" cx="9" cy="97" r="6"/>
         </g>
+        <rect class="agi-body" x="20" y="28" width="80" height="92" rx="24"/>
+        <path class="agi-band" d="M20 52 V50 A22 22 0 0 1 42 28 H78 A22 22 0 0 1 100 50 V52 Z"/>
+        <rect class="agi-ring" x="36" y="16" width="9" height="22" rx="4.5"/>
+        <rect class="agi-ring" x="75" y="16" width="9" height="22" rx="4.5"/>
+        <rect class="agi-face" x="30" y="58" width="60" height="50" rx="15"/>
+        <g class="agi-eyes">
+        <ellipse class="agi-ink" cx="48" cy="78" rx="5.5" ry="7"/>
+        <ellipse class="agi-ink" cx="72" cy="78" rx="5.5" ry="7"/>
+        <circle class="agi-glint" cx="50" cy="75" r="2"/>
+        <circle class="agi-glint" cx="74" cy="75" r="2"/>
+        </g>
+        <ellipse class="agi-cheek" cx="39" cy="90" rx="5" ry="3"/>
+        <ellipse class="agi-cheek" cx="81" cy="90" rx="5" ry="3"/>
+        <path class="agi-smile" d="M52 91 Q60 98 68 91"/>
+        <g class="agi-arm-r">
+        <path class="agi-limb" d="M98 76 H118"/>
+        <circle class="agi-hand" cx="119" cy="76" r="6"/>
+        </g>
+        </g>
+        </svg>
 
         <g class="prop-group" data-slide="0">
           <rect x="30" y="40" width="46" height="42" rx="5" fill="none" stroke="var(--text)" stroke-width="3"/>

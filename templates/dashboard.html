@@ -1548,6 +1548,80 @@
         animation: none;
       }
     }
+    /* ---- Agi, the guide ---- */
+    .agi { overflow: visible; display: block; }
+    .agi-body { fill: #10a3b0; stroke: #13292b; stroke-width: 3; }
+    .agi-band { fill: #0b7a85; stroke: #13292b; stroke-width: 3; }
+    .agi-ring { fill: #e9eef0; stroke: #13292b; stroke-width: 3; }
+    .agi-face { fill: #ffffff; stroke: #13292b; stroke-width: 2.5; }
+    .agi-ink { fill: #13292b; }
+    .agi-foot { fill: #0b7a85; stroke: #13292b; stroke-width: 3; }
+    .agi-glint { fill: #ffffff; }
+    .agi-cheek { fill: #ff8fa3; opacity: 0.6; }
+    .agi-smile, .agi-limb {
+      fill: none;
+      stroke: #13292b;
+      stroke-width: 4.5;
+      stroke-linecap: round;
+    }
+    .agi-hand { fill: #10a3b0; stroke: #13292b; stroke-width: 3; }
+    .agi-shadow {
+      fill: #000;
+      opacity: 0.14;
+      animation: agiShadow 2.6s ease-in-out infinite;
+    }
+    [data-theme="dark"] .agi-shadow { fill: #33d1de; opacity: 0.12; }
+    [data-theme="dark"] .agi {
+      filter: drop-shadow(0 0 1.5px rgba(230, 239, 239, 0.35));
+    }
+    .agi-bob { animation: agiBob 2.6s ease-in-out infinite; }
+    .agi-eyes { animation: agiBlink 4.2s infinite; transform-origin: 60px 78px; }
+    .agi-arm-r {
+      transform-origin: 98px 76px;
+      transform: rotate(var(--agi-aim, -35deg));
+      transition: transform 0.5s cubic-bezier(.2, .8, .2, 1);
+    }
+    .agi-arm-l { transform-origin: 24px 76px; }
+    .agi.waving .agi-arm-r { animation: agiWave 1.8s ease-in-out infinite; }
+    .agi.pointing .agi-arm-r .agi-hand {
+      animation: agiPoke 1.2s ease-in-out infinite;
+    }
+    @keyframes agiBob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    @keyframes agiShadow {
+      0%, 100% { transform: scaleX(1); transform-origin: 60px 134px; }
+      50% { transform: scaleX(0.85); transform-origin: 60px 134px; }
+    }
+    @keyframes agiBlink {
+      0%, 90%, 100% { transform: scaleY(1); }
+      94% { transform: scaleY(0.1); }
+    }
+    @keyframes agiWave {
+      0%, 100% { transform: rotate(-60deg); }
+      50% { transform: rotate(-20deg); }
+    }
+    @keyframes agiPoke {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(3px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .agi-bob, .agi-shadow, .agi-eyes, .agi.waving .agi-arm-r,
+      .agi.pointing .agi-arm-r .agi-hand { animation: none; }
+    }
+    .tour-agi {
+      position: fixed;
+      z-index: 4002;
+      width: 84px;
+      height: 98px;
+      pointer-events: none;
+      transition-property: top, left;
+      transition-duration: 0.45s;
+      transition-timing-function: cubic-bezier(.2, .8, .2, 1);
+    }
+    .tour-agi .agi { width: 100%; height: 100%; }
+    .tour-agi.flip .agi { transform: scaleX(-1); }
   </style>
 </head>
 <body>
@@ -3015,7 +3089,102 @@
     // ---- First-run guided tour ----
     // Highlights the real parts of the screen one at a time. Runs once per
     // account (the server remembers), and can be replayed from the menu.
-    const tour = { steps: [], i: 0, spot: null, card: null, blocker: null };
+    const tour = { steps: [], i: 0, spot: null, card: null, blocker: null, agi: null };
+    // Agi, the Agenndar guide: a little planner page with binder rings.
+    // Original artwork, drawn here in SVG so it stays sharp and themeable.
+    function agiSvg(extraClass) {
+      return '<svg class="agi ' + (extraClass || '') + '" viewBox="0 0 120 140"'
+        + ' aria-hidden="true" focusable="false">'
+        + '<ellipse class="agi-shadow" cx="60" cy="134" rx="26" ry="4"/>'
+        + '<g class="agi-bob">'
+        // feet
+        + '<ellipse class="agi-foot" cx="45" cy="121" rx="10" ry="6"/>'
+        + '<ellipse class="agi-foot" cx="75" cy="121" rx="10" ry="6"/>'
+        // waving / resting arm (left)
+        + '<g class="agi-arm-l"><path class="agi-limb" d="M24 76 Q10 82 9 96"/>'
+        + '<circle class="agi-hand" cx="9" cy="97" r="6"/></g>'
+        // body, header band and binder rings
+        + '<rect class="agi-body" x="20" y="28" width="80" height="92" rx="24"/>'
+        + '<path class="agi-band" d="M20 52 V50 A22 22 0 0 1 42 28 H78 A22 22 0'
+        + ' 0 1 100 50 V52 Z"/>'
+        + '<rect class="agi-ring" x="36" y="16" width="9" height="22" rx="4.5"/>'
+        + '<rect class="agi-ring" x="75" y="16" width="9" height="22" rx="4.5"/>'
+        // face page
+        + '<rect class="agi-face" x="30" y="58" width="60" height="50" rx="15"/>'
+        + '<g class="agi-eyes">'
+        + '<ellipse class="agi-ink" cx="48" cy="78" rx="5.5" ry="7"/>'
+        + '<ellipse class="agi-ink" cx="72" cy="78" rx="5.5" ry="7"/>'
+        + '<circle class="agi-glint" cx="50" cy="75" r="2"/>'
+        + '<circle class="agi-glint" cx="74" cy="75" r="2"/></g>'
+        + '<ellipse class="agi-cheek" cx="39" cy="90" rx="5" ry="3"/>'
+        + '<ellipse class="agi-cheek" cx="81" cy="90" rx="5" ry="3"/>'
+        + '<path class="agi-smile" d="M52 91 Q60 98 68 91"/>'
+        // pointing arm (right), rotated from the shoulder to aim at things
+        + '<g class="agi-arm-r"><path class="agi-limb" d="M98 76 H118"/>'
+        + '<circle class="agi-hand" cx="119" cy="76" r="6"/></g>'
+        + '</g></svg>';
+    }
+
+    // Agi stands beside the tour card and points at what's highlighted.
+    function placeAgi(el, cl, ct, cw, ch) {
+      const a = tour.agi;
+      if (!a) return;
+      const W = 84, H = 98, s = W / 120;
+      const svg = a.querySelector('.agi');
+      let mx, my;
+      if (!el) {
+        mx = cl + cw / 2 - W / 2;
+        my = ct - H + 12;
+      } else if (cl - W - 8 >= 4) {
+        mx = cl - W - 8;
+        my = ct + 6;
+      } else if (cl + cw + W + 8 <= innerWidth - 4) {
+        mx = cl + cw + 8;
+        my = ct + 6;
+      } else {
+        // No room at the sides (phones): stand on the card's far side from
+        // the highlight, so Agi never covers what it's pointing at.
+        const tr = el.getBoundingClientRect();
+        const targetAbove = tr.top + tr.height / 2 < ct;
+        mx = cl + 14;
+        if (targetAbove && ct + ch + H + 4 <= innerHeight - 4) {
+          my = ct + ch + 4;
+        } else if (targetAbove) {
+          // No room below either: perch on the card's top-right corner.
+          mx = cl + cw - W - 6;
+          my = ct - H + 34;
+        } else {
+          my = ct - H + 12;
+        }
+      }
+      mx = Math.max(4, Math.min(innerWidth - W - 4, mx));
+      my = Math.max(4, Math.min(innerHeight - H - 4, my));
+      a.style.left = mx + 'px';
+      a.style.top = my + 'px';
+      svg.classList.toggle('waving', !el);
+      svg.classList.toggle('pointing', !!el);
+      if (!el) {
+        a.classList.remove('flip');
+        return;
+      }
+      // Aim at the nearest edge of the highlight, or its middle if Agi is on it.
+      const r = el.getBoundingClientRect();
+      const cx = mx + W / 2, cy = my + H / 2;
+      let tx = Math.max(r.left, Math.min(cx, r.right));
+      let ty = Math.max(r.top, Math.min(cy, r.bottom));
+      if (tx === cx && ty === cy) {
+        tx = r.left + r.width / 2;
+        ty = r.top + r.height / 2;
+      }
+      const flip = tx < cx - 4;
+      a.classList.toggle('flip', flip);
+      const sx = mx + (flip ? 22 : 98) * s, sy = my + 76 * s;
+      let ang = Math.atan2(ty - sy, tx - sx) * 180 / Math.PI;
+      if (flip) ang = 180 - ang;
+      if (ang > 180) ang -= 360;
+      ang = Math.max(-110, Math.min(110, ang));
+      svg.style.setProperty('--agi-aim', ang + 'deg');
+    }
 
     function tourVisible(el) {
       if (!el) return false;
@@ -3053,10 +3222,10 @@
       const phone = isMobileView();
       const banner = document.getElementById('reconcileBanner');
       return [
-        { title: 'Welcome to Agenndar 👋',
-          text: "A planner that keeps you honest: plan your week, do the work, "
-            + "and your score shows how it really went. This tour takes about "
-            + "a minute." },
+        { title: "Hi, I'm Agi 👋",
+          text: "I'll show you around Agenndar, the planner that keeps you "
+            + "honest: plan your week, do the work, and your score shows how "
+            + "it really went. It takes about a minute." },
         { target: tourAddTarget, title: 'Add a task',
           text: phone
             ? 'Tap + to add a task: pick the day, start time, how long it takes '
@@ -3118,7 +3287,10 @@
       tour.card.className = 'tour-card';
       tour.card.setAttribute('role', 'dialog');
       tour.card.setAttribute('aria-live', 'polite');
-      document.body.append(tour.blocker, tour.spot, tour.card);
+      tour.agi = document.createElement('div');
+      tour.agi.className = 'tour-agi';
+      tour.agi.innerHTML = agiSvg();
+      document.body.append(tour.blocker, tour.spot, tour.card, tour.agi);
       window.addEventListener('resize', placeTour);
       window.addEventListener('scroll', placeTour, true);
       document.addEventListener('keydown', tourKeys);
@@ -3193,7 +3365,10 @@
           width: '0px', height: '0px'
         });
         tour.card.style.left = Math.max(16, (innerWidth - cw) / 2) + 'px';
-        tour.card.style.top = Math.max(16, (innerHeight - ch) / 2) + 'px';
+        // Leave room above the card for Agi.
+        const ctop = Math.max(110, (innerHeight - ch) / 2);
+        tour.card.style.top = ctop + 'px';
+        placeAgi(null, Math.max(16, (innerWidth - cw) / 2), ctop, cw, ch);
         return;
       }
       tour.spot.classList.remove('centered');
@@ -3214,6 +3389,7 @@
       cardLeft = Math.max(16, Math.min(innerWidth - cw - 16, cardLeft));
       tour.card.style.top = cardTop + 'px';
       tour.card.style.left = cardLeft + 'px';
+      placeAgi(el, cardLeft, cardTop, cw, ch);
     }
 
     function tourAction(what) {
@@ -3237,8 +3413,8 @@
     }
 
     function closeTourParts() {
-      [tour.spot, tour.card, tour.blocker].forEach(n => n && n.remove());
-      tour.spot = tour.card = tour.blocker = null;
+      [tour.spot, tour.card, tour.blocker, tour.agi].forEach(n => n && n.remove());
+      tour.spot = tour.card = tour.blocker = tour.agi = null;
       window.removeEventListener('resize', placeTour);
       window.removeEventListener('scroll', placeTour, true);
       document.removeEventListener('keydown', tourKeys);
