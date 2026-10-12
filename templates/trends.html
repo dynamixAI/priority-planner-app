@@ -3,173 +3,332 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32"
+    href="{{ url_for('static', filename='favicon-32.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
-  <title>Behavioural Trends | Agenndar</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>Trends | Agenndar</title>
+  <script>
+    const cachedTheme = localStorage.getItem('planner-theme');
+    if (cachedTheme) document.documentElement.setAttribute('data-theme', cachedTheme);
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
   <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url("{{ url_for('static', filename='fonts/Onest-Variable.woff2') }}")
+          format('woff2');
+      font-weight: 100 900;
+      font-display: swap;
+    }
     :root {
-      --bg: #efeeea;
+      --bg: #eef2f2;
       --card-bg: #ffffff;
-      --text: #121214;
-      --border: #dcdad5;
-      --primary: #0891a3;
-      --primary-hover: #076e7d;
-      --metric-muted: #6b6f76;
-      --table-header: #f5f4f0;
+      --text: #13201f;
+      --muted: #5b6b6b;
+      --border: #d9e1e1;
+      --hover: #e6eeee;
+      --primary: #0b8a97;
+      --grid: #e8eded;
+      /* Validated for colour-blind separation on this surface */
+      --done: #1a8a4c;
+      --pushed: #7c5cd6;
+      --missed: #d93c50;
     }
     [data-theme="dark"] {
-      --bg: #121214;
-      --card-bg: #1c1c1f;
-      --text: #f2f1ee;
-      --border: #2c2c30;
-      --primary: #00d6e8;
-      --primary-hover: #00b8c9;
-      --metric-muted: #9a9da3;
-      --table-header: #18181b;
+      --bg: #0d1617;
+      --card-bg: #142123;
+      --text: #e6efef;
+      --muted: #8fa3a3;
+      --border: #23373a;
+      --hover: #1b2c2f;
+      --primary: #33d1de;
+      --grid: #1d2e31;
+      --done: #2aa362;
+      --pushed: #8f7cf0;
+      --missed: #e5505f;
     }
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Onest', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
       background: var(--bg);
       color: var(--text);
       margin: 0;
-      padding: 1.5rem;
       min-height: 100vh;
+      padding: calc(1.25rem + env(safe-area-inset-top)) 1rem
+        calc(2rem + env(safe-area-inset-bottom));
+    }
+    .page { max-width: 960px; margin: 0 auto; }
+    .back-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
     }
     .header-row {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.25rem;
+      align-items: flex-end;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 0.9rem;
+      margin: 0.6rem 0 1.1rem;
     }
-    h1 { font-size: 1.3rem; margin: 0; color: var(--primary); }
-    .back-link {
-      color: var(--primary);
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-    .range-presets { display: flex; gap: 0.5rem; }
-    .preset-btn {
-      padding: 0.5rem 0.9rem;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--card-bg);
-      color: var(--text);
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    .preset-btn:hover { border-color: var(--primary); }
-    .preset-btn.active {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: #ffffff;
-    }
-    .chart-card {
+    h1 { font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
+    .range {
+      display: flex;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 1.5rem;
-      height: 65vh;
+      padding: 3px;
+    }
+    .range a {
+      padding: 0.45rem 0.8rem;
+      border-radius: 8px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.84rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .range a:hover { background: var(--hover); }
+    .range a.active { background: var(--text); color: var(--bg); }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1.4fr repeat(3, 1fr);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 0.9rem;
+    }
+    .stat { padding: 0.9rem 1rem; border-left: 1px solid var(--border); }
+    .stat:first-child { border-left: none; }
+    .stat-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .stat-num { font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
+    .stat-sub { font-size: 0.78rem; color: var(--muted); }
+    .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1rem 1.1rem 0.8rem;
+      margin-bottom: 0.9rem;
+    }
+    .chart-card h2 { font-size: 0.98rem; font-weight: 650; margin: 0 0 0.15rem; }
+    .chart-card p { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.7rem; }
+    .legend {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .chart-box { position: relative; height: 280px; }
+    .chart-box.small { height: 190px; }
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 2.5rem 1rem;
+    }
+
+    @media (max-width: 640px) {
+      h1 { font-size: 1.35rem; }
+      .header-row { align-items: flex-start; flex-direction: column; }
+      .range { width: 100%; }
+      .range a { flex: 1; text-align: center; padding: 0.5rem 0.2rem; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .stat:nth-child(3) { border-left: none; }
+      .stat:nth-child(n+3) { border-top: 1px solid var(--border); }
+      .stat-num { font-size: 1.35rem; }
+      .chart-box { height: 240px; }
     }
   </style>
 </head>
 <body>
-  <div class="header-row">
-    <div>
-      <a href="/dashboard" class="back-link">← Back to Dashboard</a>
-      <h1 style="margin-top: 0.35rem;">📈 Behavioural Trends</h1>
+  <div class="page">
+    <a href="/dashboard" class="back-link">&larr; Dashboard</a>
+    <div class="header-row">
+      <h1>Trends</h1>
+      <nav class="range" aria-label="Time period">
+        <a href="/trends?days=7" class="{{ 'active' if days == 7 else '' }}">7 days</a>
+        <a href="/trends?days=14" class="{{ 'active' if days == 14 else '' }}">14 days</a>
+        <a href="/trends?days=30" class="{{ 'active' if days == 30 else '' }}">30 days</a>
+        <a href="/trends?days=90" class="{{ 'active' if days == 90 else '' }}">90 days</a>
+      </nav>
     </div>
-    <div class="range-presets">
-      <a href="/trends?days=7" class="preset-btn {{ 'active' if days == 7 else '' }}">7 Days</a>
-      <a href="/trends?days=14" class="preset-btn {{ 'active' if days == 14 else '' }}">14 Days</a>
-      <a href="/trends?days=30" class="preset-btn {{ 'active' if days == 30 else '' }}">30 Days</a>
-      <a href="/trends?days=90" class="preset-btn {{ 'active' if days == 90 else '' }}">90 Days</a>
-    </div>
-  </div>
 
-  <div class="chart-card">
-    <canvas id="behaviorChart"></canvas>
+    <section class="stats" aria-label="Totals for this period">
+      <div class="stat">
+        <div class="stat-label">Completion rate</div>
+        <div class="stat-num" id="statRate">&ndash;</div>
+        <div class="stat-sub" id="statRateSub"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label"><i class="swatch" style="background: var(--done);"></i>Done</div>
+        <div class="stat-num" id="statDone">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label"><i class="swatch" style="background: var(--pushed);"></i>Pushed</div>
+        <div class="stat-num" id="statPushed">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label"><i class="swatch" style="background: var(--missed);"></i>Missed</div>
+        <div class="stat-num" id="statMissed">0</div>
+      </div>
+    </section>
+
+    <section class="chart-card">
+      <h2>What happened each day</h2>
+      <p>Tasks done, pushed after they were due, or missed. Free replans don't count.</p>
+      <div class="legend" aria-hidden="true">
+        <span><i class="swatch" style="background: var(--done);"></i>Done</span>
+        <span><i class="swatch" style="background: var(--pushed);"></i>Pushed</span>
+        <span><i class="swatch" style="background: var(--missed);"></i>Missed</span>
+      </div>
+      <div class="chart-box"><canvas id="outcomeChart"
+        aria-label="Done, pushed and missed tasks per day"></canvas></div>
+    </section>
+
+    <section class="chart-card">
+      <h2>Completion rate</h2>
+      <p>Done as a share of done, pushed and missed. Days with nothing to judge are left blank.</p>
+      <div class="chart-box small"><canvas id="rateChart"
+        aria-label="Daily completion rate"></canvas></div>
+    </section>
   </div>
 
   <script>
     const chartData = {{ chart_data|tojson }};
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const textColor = isDark ? '#94a3b8' : '#64748b';
-    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const css = name => getComputedStyle(document.documentElement)
+      .getPropertyValue(name).trim();
+    const sum = arr => arr.reduce((a, b) => a + b, 0);
 
-    const ctx = document.getElementById('behaviorChart').getContext('2d');
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: chartData.labels,
-        datasets: [
-          {
-            label: 'Completed On-Time',
-            data: chartData.completed,
-            borderColor: '#16a34a',
-            backgroundColor: '#16a34a',
-            borderWidth: 2,
-            pointRadius: 3,
-            tension: 0.3,
-            fill: false,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Pushed (Procrastination)',
-            data: chartData.pushed,
-            borderColor: '#7c3aed',
-            backgroundColor: '#7c3aed',
-            borderWidth: 2,
-            pointRadius: 3,
-            tension: 0.3,
-            fill: false,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Missed Tasks',
-            data: chartData.missed,
-            borderColor: '#ef4444',
-            backgroundColor: '#ef4444',
-            borderWidth: 2,
-            pointRadius: 3,
-            tension: 0.3,
-            fill: false,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Execution Score %',
-            data: chartData.rate,
-            borderColor: '#0284c7',
-            backgroundColor: '#0284c7',
-            borderWidth: 2,
-            pointRadius: 3,
-            borderDash: [5, 5],
-            tension: 0.3,
-            fill: false,
-            yAxisID: 'y1'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-          x: { ticks: { color: textColor }, grid: { color: gridColor } },
-          y: { type: 'linear', display: true, position: 'left', ticks: { color: textColor, stepSize: 1 }, grid: { color: gridColor } },
-          y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, ticks: { color: '#0284c7', callback: v => v + '%' }, grid: { drawOnChartArea: false } }
+    // Totals for the period
+    const done = sum(chartData.completed);
+    const pushed = sum(chartData.pushed);
+    const missed = sum(chartData.missed);
+    const judged = done + pushed + missed;
+    document.getElementById('statDone').textContent = done;
+    document.getElementById('statPushed').textContent = pushed;
+    document.getElementById('statMissed').textContent = missed;
+    document.getElementById('statRate').textContent =
+      judged ? Math.round(done / judged * 100) + '%' : '–';
+    document.getElementById('statRateSub').textContent =
+      judged ? done + ' of ' + judged + ' tasks' : 'Nothing to judge yet';
+
+    if (!judged || typeof Chart === 'undefined') {
+      document.querySelectorAll('.chart-box').forEach(box => {
+        box.innerHTML = '<div class="empty">' + (judged
+          ? 'The chart could not load. Check your connection and refresh.'
+          : 'No done, pushed or missed tasks in this period yet.') + '</div>';
+        box.style.height = 'auto';
+      });
+    } else {
+      // Charts draw on a canvas, which won't wait for the web font, so load
+      // Onest first. If it fails, draw anyway with the system font.
+      const fontReady = document.fonts
+        ? document.fonts.load('12px Onest').catch(() => null)
+        : Promise.resolve();
+      fontReady.then(drawCharts);
+    }
+
+    function drawCharts() {
+      Chart.defaults.font.family = "Onest, system-ui, sans-serif";
+      Chart.defaults.color = css('--muted');
+      const grid = { color: css('--grid') };
+      const ticks = { maxRotation: 0, autoSkip: true, autoSkipPadding: 12 };
+      const tooltip = {
+        backgroundColor: css('--text'),
+        titleColor: css('--bg'),
+        bodyColor: css('--bg'),
+        padding: 10,
+        boxPadding: 4,
+        usePointStyle: true
+      };
+      const bar = (label, data, color) => ({
+        label, data, backgroundColor: color,
+        borderColor: css('--card-bg'), borderWidth: 1,
+        borderRadius: 4, borderSkipped: false, maxBarThickness: 36
+      });
+
+      new Chart(document.getElementById('outcomeChart'), {
+        type: 'bar',
+        data: {
+          labels: chartData.labels,
+          datasets: [
+            bar('Done', chartData.completed, css('--done')),
+            bar('Pushed', chartData.pushed, css('--pushed')),
+            bar('Missed', chartData.missed, css('--missed'))
+          ]
         },
-        plugins: {
-          legend: { labels: { color: textColor, font: { size: 11, weight: 'bold' } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks },
+            y: { stacked: true, beginAtZero: true, grid, border: { display: false },
+                 ticks: { precision: 0 } }
+          },
+          plugins: { legend: { display: false }, tooltip }
         }
-      }
-    });
+      });
+
+      // A day with nothing done, pushed or missed has no rate: leave a gap
+      // rather than drawing it as 0%.
+      const rate = chartData.labels.map((_, i) => {
+        const n = chartData.completed[i] + chartData.pushed[i] + chartData.missed[i];
+        return n ? Math.round(chartData.completed[i] / n * 100) : null;
+      });
+      new Chart(document.getElementById('rateChart'), {
+        type: 'line',
+        data: {
+          labels: chartData.labels,
+          datasets: [{
+            label: 'Completion rate',
+            data: rate,
+            borderColor: css('--primary'),
+            backgroundColor: css('--primary'),
+            borderWidth: 2,
+            pointRadius: chartData.labels.length > 31 ? 2 : 4,
+            pointHoverRadius: 6,
+            pointBorderColor: css('--card-bg'),
+            pointBorderWidth: 2,
+            cubicInterpolationMode: 'monotone',
+            spanGaps: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, ticks },
+            y: { min: 0, max: 100, grid, border: { display: false },
+                 ticks: { stepSize: 25, callback: v => v + '%' } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { ...tooltip, callbacks: { label: c => ' ' + c.parsed.y + '%' } }
+          }
+        }
+      });
+    }
   </script>
 </body>
 </html>

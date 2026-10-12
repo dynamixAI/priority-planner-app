@@ -8,132 +8,148 @@
   <title>Settings | Agenndar</title>
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url("{{ url_for('static', filename='fonts/Onest-Variable.woff2') }}")
+          format('woff2');
+      font-weight: 100 900;
+      font-display: swap;
+    }
     :root {
-      --bg: #efeeea;
+      --bg: #eef2f2;
       --card-bg: #ffffff;
-      --text: #121214;
-      --border: #dcdad5;
-      --subtext: #6b6f76;
-      --input-bg: #f5f4f0;
-      --primary: #0891a3;
-      --primary-hover: #076e7d;
+      --text: #13201f;
+      --border: #d9e1e1;
+      --subtext: #5b6b6b;
+      --input-bg: #f6f8f8;
+      --hover: #e6eeee;
+      --primary: #0b8a97;
+      --primary-hover: #08707b;
+      --on-primary: #ffffff;
+      --danger: #c2333a;
     }
-
     [data-theme="dark"] {
-      --bg: #121214;
-      --card-bg: #1c1c1f;
-      --text: #f2f1ee;
-      --border: #2c2c30;
-      --subtext: #9a9da3;
-      --input-bg: #18181b;
-      --primary: #00d6e8;
-      --primary-hover: #00b8c9;
+      --bg: #0d1617;
+      --card-bg: #142123;
+      --text: #e6efef;
+      --border: #23373a;
+      --subtext: #8fa3a3;
+      --input-bg: #111c1e;
+      --hover: #1b2c2f;
+      --primary: #33d1de;
+      --primary-hover: #5cdce6;
+      --on-primary: #062226;
+      --danger: #ff7a7f;
     }
-
+    * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Onest', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
       background: var(--bg);
       color: var(--text);
       margin: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       min-height: 100vh;
-      padding: 1.5rem;
-      box-sizing: border-box;
-      transition: background 0.15s ease, color 0.15s ease;
+      padding: calc(1.25rem + env(safe-area-inset-top)) 1rem
+        calc(2rem + env(safe-area-inset-bottom));
     }
-    .card {
+    button, input, select { font-family: inherit; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .card { width: 100%; max-width: 620px; margin: 0 auto; }
+    .top-back {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    h2 {
+      margin: 0.6rem 0 1rem;
+      font-size: 1.6rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    p { font-size: 0.85rem; color: var(--subtext); line-height: 1.5; margin: 0 0 1rem; }
+    form, .info-block {
       background: var(--card-bg);
-      padding: 2.25rem;
-      border-radius: 12px;
-      width: 100%;
-      max-width: 560px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
       border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0.4rem 1.1rem 1.1rem;
+      margin-bottom: 0.9rem;
     }
-    @media (max-width: 420px) {
-      .card { padding: 1.5rem; }
-    }
-    h2 { margin-top: 0; color: var(--primary); font-size: 1.4rem; }
-    p { font-size: 0.85rem; color: var(--subtext); line-height: 1.4; margin-bottom: 1.25rem; }
 
     .section-title {
-      font-size: 0.82rem;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      font-size: 0.95rem;
+      font-weight: 650;
       color: var(--text);
-      margin-top: 1.25rem;
-      margin-bottom: 0.65rem;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 0.35rem;
+      margin: 0 -1.1rem 0.7rem;
+      padding: 1rem 1.1rem 0;
+      border-top: 1px solid var(--border);
+    }
+    form > .section-title:first-of-type, .info-block > .section-title {
+      border-top: none;
     }
 
-    .theme-toggle-group {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    .theme-btn {
-      padding: 0.65rem 1rem;
-      border-radius: 8px;
-      border: 2px solid var(--border);
-      background: var(--input-bg);
-      color: var(--text);
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 0.85rem;
+    /* Choices as tappable pills; the real radio/checkbox stays for
+       keyboards and screen readers but is visually hidden. */
+    .radio-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .radio-row label, .day-box {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
-      transition: all 0.15s ease;
+      gap: 0.4rem;
+      padding: 0.6rem 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--input-bg);
+      font-size: 0.86rem;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
     }
-    .theme-btn:hover { border-color: var(--primary); }
-    .theme-btn.active {
-      border-color: var(--primary);
-      background: var(--primary);
-      color: #ffffff;
+    .radio-row label:hover, .day-box:hover { border-color: var(--primary); }
+    .radio-row input, .day-box input {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+      margin: 0;
     }
-
-    .radio-row { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-size: 0.85rem; }
-    .radio-row label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
-
+    .radio-row label:has(input:checked), .day-box:has(input:checked) {
+      background: var(--text);
+      border-color: var(--text);
+      color: var(--bg);
+    }
+    .radio-row label:has(input:focus-visible), .day-box:has(input:focus-visible) {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    .radio-row.stacked label { justify-content: flex-start; width: 100%; }
     .days-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 0.35rem;
       margin-bottom: 1rem;
     }
-    .day-box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 0.5rem 0.2rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--input-bg);
-      font-size: 0.75rem;
-      cursor: pointer;
-    }
-    .day-box input { margin-bottom: 0.25rem; }
+    .day-box { padding: 0.6rem 0; font-size: 0.8rem; }
 
     .overdue-tooltip {
       display: none;
       position: absolute;
       top: 130%;
-      left: 0;
+      right: 0;
       width: 260px;
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.65rem 0.75rem;
-      font-size: 0.75rem;
-      line-height: 1.4;
+      border-radius: 10px;
+      padding: 0.7rem 0.8rem;
+      font-size: 0.78rem;
+      font-weight: 400;
+      line-height: 1.45;
       color: var(--text);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
       z-index: 50;
     }
     .info-icon {
@@ -141,14 +157,14 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: var(--input-bg);
       border: 1px solid var(--border);
       color: var(--primary);
-      font-size: 0.7rem;
-      font-weight: bold;
+      font-size: 0.72rem;
+      font-weight: 700;
       cursor: pointer;
     }
     @media (hover: hover) {
@@ -156,9 +172,9 @@
     }
     .overdue-tooltip.show { display: block; }
     .preset-btn {
-      padding: 0.4rem 0.75rem;
-      font-size: 0.72rem;
-      border-radius: 6px;
+      padding: 0.5rem 0.8rem;
+      font-size: 0.8rem;
+      border-radius: 10px;
       border: 1px solid var(--border);
       background: var(--input-bg);
       color: var(--text);
@@ -167,115 +183,125 @@
     }
     .preset-btn:hover { border-color: var(--primary); }
 
-    .priority-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
-    .priority-row { display: flex; align-items: center; gap: 0.65rem; }
-
+    .priority-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.8rem; }
+    .priority-row { display: flex; align-items: center; gap: 0.6rem; }
     input[type="color"] {
       border: 1px solid var(--border);
-      width: 38px;
-      height: 38px;
-      border-radius: 6px;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
       cursor: pointer;
-      padding: 2px;
+      padding: 3px;
       background: var(--card-bg);
+      flex: none;
     }
-    input[type="text"] {
-      flex: 1;
-      padding: 0.6rem 0.75rem;
-      border-radius: 6px;
+    input[type="text"], input[type="number"], select {
+      padding: 0.65rem 0.75rem;
+      border-radius: 10px;
       border: 1px solid var(--border);
       background: var(--input-bg);
       color: var(--text);
-      font-size: 0.85rem;
+      font-size: 0.9rem;
     }
-    input[type="text"]:focus { outline: none; border-color: var(--primary); }
+    input[type="text"] { flex: 1; min-width: 0; }
+    input:focus, select:focus { outline: none; border-color: var(--primary); }
+    #timezoneSelect { border-radius: 10px !important; padding: 0.65rem 0.75rem !important; }
+    #overdueThresholdInput { border-radius: 10px !important; padding: 0.55rem !important; }
 
     .btn-delete {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #ef4444;
-      border-radius: 6px;
-      width: 36px;
-      height: 36px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--subtext);
+      border-radius: 10px;
+      width: 42px;
+      height: 42px;
+      flex: none;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-weight: bold;
     }
-    .btn-delete:hover { background: rgba(239, 68, 68, 0.2); }
-
+    .btn-delete:hover { color: var(--danger); border-color: var(--danger); }
     .btn-add {
-      background: var(--input-bg);
+      background: transparent;
       border: 1px dashed var(--border);
       color: var(--primary);
       width: 100%;
-      padding: 0.65rem;
-      border-radius: 6px;
+      padding: 0.7rem;
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 0.85rem;
+      font-size: 0.88rem;
       font-weight: 600;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.1rem;
     }
     .btn-add:hover { border-color: var(--primary); }
 
+    /* Save stays reachable at the bottom of the screen while scrolling */
     .btn-save {
+      position: sticky;
+      bottom: calc(0.75rem + env(safe-area-inset-bottom));
       width: 100%;
-      padding: 0.75rem;
-      border-radius: 6px;
+      padding: 0.85rem;
+      border-radius: 12px;
       background: var(--primary);
-      color: #fff;
-      font-weight: bold;
+      color: var(--on-primary);
+      font-weight: 650;
       border: none;
       cursor: pointer;
       font-size: 0.95rem;
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 30%, transparent);
     }
     .btn-save:hover { background: var(--primary-hover); }
-    .back-link { text-align: center; margin-top: 1rem; font-size: 0.85rem; }
-    .back-link a { color: var(--primary); text-decoration: none; }
+    .back-link { text-align: center; margin-top: 1rem; font-size: 0.88rem; }
+    .back-link a { color: var(--primary); text-decoration: none; font-weight: 600; }
 
     .danger-zone {
-      border: 1px solid rgba(239, 68, 68, 0.35);
-      background: rgba(239, 68, 68, 0.06);
-      border-radius: 8px;
-      padding: 1rem;
-      margin-top: 1.5rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem 1.1rem 1.1rem;
     }
-    .danger-zone .section-title { color: #ef4444; border-bottom-color: rgba(239, 68, 68, 0.3); margin-top: 0; }
-    .danger-zone p { margin-bottom: 0.85rem; }
+    .danger-zone .section-title {
+      color: var(--danger);
+      border-top: none;
+      padding-top: 0;
+    }
+    .danger-zone p { margin-bottom: 0.7rem; }
     .btn-danger {
       width: 100%;
-      padding: 0.7rem;
-      border-radius: 6px;
-      background: #ef4444;
-      color: #fff;
-      font-weight: bold;
-      border: none;
+      padding: 0.75rem;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--danger);
+      font-weight: 650;
+      border: 1px solid var(--danger);
       cursor: pointer;
       font-size: 0.9rem;
+      margin-bottom: 0.4rem;
     }
-    .btn-danger:hover { background: #dc2626; }
+    .btn-danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
   </style>
 </head>
 <body>
   <div class="card">
+    <a href="/dashboard" class="top-back">&larr; Dashboard</a>
     <h2>Settings</h2>
 
     <form method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="section-title">Calendar Start Day</div>
+      <div class="section-title">Week starts on</div>
       <div class="radio-row">
         <label>
           <input type="radio" name="week_start" value="sunday" {% if week_start == 'sunday' %}checked{% endif %}>
-          Start Week on Sunday
+          Sunday
         </label>
         <label>
           <input type="radio" name="week_start" value="monday" {% if week_start == 'monday' %}checked{% endif %}>
-          Start Week on Monday
+          Monday
         </label>
       </div>
 
-      <div class="section-title">Active Schedule Days (Visible Columns)</div>
+      <div class="section-title">Days shown on the timetable</div>
       <div class="days-grid">
         <label class="day-box"><input type="checkbox" name="active_days[]" value="0" {% if '0' in active_days %}checked{% endif %}>Sun</label>
         <label class="day-box"><input type="checkbox" name="active_days[]" value="1" {% if '1' in active_days %}checked{% endif %}>Mon</label>
@@ -286,8 +312,8 @@
         <label class="day-box"><input type="checkbox" name="active_days[]" value="6" {% if '6' in active_days %}checked{% endif %}>Sat</label>
       </div>
 
-      <div class="section-title">Timetable Layout</div>
-      <div class="radio-row" style="flex-direction: column; gap: 0.6rem;">
+      <div class="section-title">Timetable layout (computer)</div>
+      <div class="radio-row stacked">
         <label>
           <input type="radio" name="grid_orientation" value="time_rows" {% if grid_orientation != 'day_rows' %}checked{% endif %}>
           Hours down the side, days across the top
@@ -298,7 +324,7 @@
         </label>
       </div>
 
-      <div class="section-title">Time Format</div>
+      <div class="section-title">Time format</div>
       <div class="radio-row">
         <label>
           <input type="radio" name="time_format" value="24h"
@@ -336,7 +362,7 @@
         at midnight, and when reminders are sent.
       </p>
 
-      <div class="section-title">Overdue Behaviour</div>
+      <div class="section-title">Overdue tasks</div>
       <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
         <label style="margin:0; font-size:0.85rem; font-weight:600; color:var(--text);">Flag a task as overdue after</label>
         <input type="number" id="overdueThresholdInput" name="overdue_threshold_days" min="1" max="365"
@@ -351,12 +377,12 @@
       </div>
       <p style="font-size:0.78rem; color:var(--subtext); margin:0 0 0.5rem 0;">Not sure? Pick a starting point:</p>
       <div style="display:flex; gap:0.5rem; margin-bottom:1.25rem; flex-wrap:wrap;">
-        <button type="button" class="preset-btn" onclick="setOverduePreset(30)">Lenient — 30 days</button>
-        <button type="button" class="preset-btn" onclick="setOverduePreset(14)">Balanced — 14 days</button>
-        <button type="button" class="preset-btn" onclick="setOverduePreset(7)">Strict — 7 days</button>
+        <button type="button" class="preset-btn" onclick="setOverduePreset(30)">Lenient (30 days)</button>
+        <button type="button" class="preset-btn" onclick="setOverduePreset(14)">Balanced (14 days)</button>
+        <button type="button" class="preset-btn" onclick="setOverduePreset(7)">Strict (7 days)</button>
       </div>
 
-      <div class="section-title">Priority Schema & Urgency Levels</div>
+      <div class="section-title">Priorities</div>
       <div class="priority-list" id="priorityList">
         {% for p in priorities %}
         <div class="priority-row">
@@ -368,25 +394,28 @@
         {% endfor %}
       </div>
 
-      <button type="button" class="btn-add" onclick="addRow()">+ Add Priority Tier</button>
-      <button type="submit" class="btn-save">Save Settings & Update Calendar</button>
+      <button type="button" class="btn-add" onclick="addRow()">+ Add priority</button>
+      <button type="submit" class="btn-save">Save settings</button>
     </form>
 
-    <div class="section-title">Privacy & Notifications</div>
-    <p style="margin-bottom: 1rem;">
+    <div class="info-block">
+    <div class="section-title">Privacy and notifications</div>
+    <p style="margin-bottom: 0.2rem;">
       If you enable notifications, your device saves a push subscription (an identifier and encryption keys) so Agenndar can send you task reminders — never the content of your tasks themselves. You can turn this off at any time from the profile menu on your dashboard.
       Read the full <a href="/privacy" target="_blank" style="color: var(--primary);">Privacy Policy</a> and <a href="/terms" target="_blank" style="color: var(--primary);">Terms of Service</a> for how your data is handled.
     </p>
-
-    <div class="danger-zone">
-      <p>Wipes everything back to a blank slate: every task, every priority tier, and every counter (Total Logged, Done, Missed, Pushed, Behaviour Index) — restored to the same defaults as a brand-new account. Your login and display theme are kept. This cannot be undone.</p>
-      <button type="button" class="btn-danger" onclick="resetAccount()">Reset Account — Wipe Everything</button>
-
-      <p style="margin-top:1rem;">Permanently deletes your account — every task, every priority tier, and your login itself. There is no recovery. You'll need to register again from scratch to use Agenndar in future.</p>
-      <button type="button" class="btn-danger" onclick="deleteAccount()">Delete Account Permanently</button>
     </div>
 
-    <div class="back-link"><a href="/dashboard">← Back to Dashboard</a></div>
+    <div class="danger-zone">
+      <div class="section-title">Reset or delete your account</div>
+      <p>Wipes everything back to a blank slate: every task, every priority tier, and every counter (Total Logged, Done, Missed, Pushed, Behaviour Index) — restored to the same defaults as a brand-new account. Your login and display theme are kept. This cannot be undone.</p>
+      <button type="button" class="btn-danger" onclick="resetAccount()">Reset account</button>
+
+      <p style="margin-top:1rem;">Permanently deletes your account — every task, every priority tier, and your login itself. There is no recovery. You'll need to register again from scratch to use Agenndar in future.</p>
+      <button type="button" class="btn-danger" onclick="deleteAccount()">Delete account</button>
+    </div>
+
+    <div class="back-link"><a href="/dashboard">&larr; Back to dashboard</a></div>
   </div>
 
   <div id="appDialogModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.7); backdrop-filter: blur(4px); align-items:center; justify-content:center; z-index:1100;">
