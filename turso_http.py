@@ -13,6 +13,17 @@ It mirrors what app.py relied on from the old client:
 import base64
 import http.client
 import json
+import threading
+
+# One open HTTPS connection to Turso per server thread, reused across
+# requests. Opening a fresh secure connection for every page load or button
+# press added a noticeable delay to everything.
+_shared = threading.local()
+
+# Errors that mean a reused connection had already been closed by Turso
+# while idle, before our request reached it. Safe to retry once on a new one.
+_STALE_ERRORS = (http.client.RemoteDisconnected, http.client.CannotSendRequest,
+                 ConnectionResetError, BrokenPipeError)
 
 
 class TursoError(Exception):
@@ -74,21 +85,29 @@ class TursoHTTPConnection:
         self._host = url.replace("libsql://", "").replace("https://", "").split("/")[0]
         self._token = token
         self._timeout = timeout
-        self._http = None
         self._pending = []
 
     def _connection(self):
-        if self._http is None:
-            self._http = http.client.HTTPSConnection(self._host, timeout=self._timeout)
-        return self._http
+        """Returns (connection, reused): the thread's open connection if there
+        is one, otherwise a new one."""
+        pool = getattr(_shared, "conns", None)
+        if pool is None:
+            pool = _shared.conns = {}
+        conn = pool.get(self._host)
+        if conn is not None:
+            return conn, True
+        conn = http.client.HTTPSConnection(self._host, timeout=self._timeout)
+        pool[self._host] = conn
+        return conn, False
 
     def close(self):
-        if self._http is not None:
+        pool = getattr(_shared, "conns", None) or {}
+        conn = pool.pop(self._host, None)
+        if conn is not None:
             try:
-                self._http.close()
+                conn.close()
             except Exception:
                 pass
-            self._http = None
 
     def _post(self, requests_list):
         body = json.dumps({"requests": requests_list}).encode()
@@ -96,14 +115,21 @@ class TursoHTTPConnection:
             "Authorization": "Bearer " + self._token,
             "Content-Type": "application/json",
         }
-        try:
-            conn = self._connection()
-            conn.request("POST", "/v2/pipeline", body=body, headers=headers)
-            resp = conn.getresponse()
-            raw = resp.read()
-        except Exception:
-            self.close()
-            raise
+        for attempt in (1, 2):
+            conn, reused = self._connection()
+            try:
+                conn.request("POST", "/v2/pipeline", body=body, headers=headers)
+                resp = conn.getresponse()
+                raw = resp.read()
+                break
+            except _STALE_ERRORS:
+                self.close()
+                if reused and attempt == 1:
+                    continue  # the idle connection had gone; try a fresh one
+                raise
+            except Exception:
+                self.close()
+                raise
         if resp.status != 200:
             self.close()
             raise TursoError("Turso HTTP %s: %s" % (resp.status, raw[:200].decode(errors="replace")))

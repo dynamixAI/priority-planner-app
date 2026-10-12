@@ -1208,7 +1208,13 @@ def reschedule_task():
         return jsonify({"error": "Please pick a valid date and start time."}), 400
 
     conn = get_db()
-    task = fetch_one(conn, "SELECT * FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
+    # The task and its owner's timezone in one database trip.
+    task = fetch_one(
+        conn,
+        "SELECT t.*, u.timezone AS owner_timezone FROM tasks t "
+        "JOIN users u ON u.id = t.user_id WHERE t.id = ? AND t.user_id = ?",
+        (task_id, session["user_id"])
+    )
     if not task:
         return jsonify({"error": "Not found"}), 404
 
@@ -1239,8 +1245,7 @@ def reschedule_task():
         # Was this task already due at the moment we're rescheduling it?
         # Only an already-overdue push counts against PUSHED/BHI — moving
         # something before it's due is a free replan, not a penalized push.
-        owner = fetch_one(conn, "SELECT timezone FROM users WHERE id = ?", (session["user_id"],))
-        now_local = user_now(clean_timezone(owner.get("timezone") if owner else ""))
+        now_local = user_now(clean_timezone(task.get("owner_timezone") or ""))
         try:
             scheduled_dt = datetime.strptime(f"{task['date']} {task['time']}", "%Y-%m-%d %H:%M")
         except ValueError:

@@ -2117,7 +2117,11 @@
     }
 
     async function warnIfOverlapping(date, timeStr, durationMinutes, excludeTaskId) {
-      const sameDay = await fetchTaskList('pending', date);
+      // Days in the week on screen are already loaded, so check those
+      // instantly; only other weeks need asking the server.
+      const sameDay = weekDatesIso.includes(date)
+        ? currentWeekTasks.filter(t => t.date === date)
+        : await fetchTaskList('pending', date);
       const overlap = findOverlappingTask(sameDay, date, timeStr, durationMinutes, excludeTaskId);
       if (!overlap) return true;
       const r = taskRangeMinutes(overlap);
@@ -3271,27 +3275,48 @@
       const proceed = await warnIfOverlapping(new_date, new_time, durationForCheck, Number(taskId));
       if (!proceed) return;
 
-      const res = await fetch('/api/task/reschedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ task_id: taskId, new_date, new_time })
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        if (result.result === "replanned") {
-          await appAlert("Moved — this task wasn't due yet, so it doesn't affect your Behaviour Index.");
-        } else if (result.result === "missed_kept") {
-          await appAlert("A follow-up task was created. The original miss stays on your record — it doesn't get erased.");
-        } else {
-          await appAlert("Pushed — this task was already due, so it counts toward your reschedule stats.");
+      // Show the move straight away, then save in the background. If the
+      // save fails, the board is reloaded from the server and the reason shown.
+      pendingMissedReload = false;
+      document.getElementById('rescheduleModal').style.display = 'none';
+      if (currentTask) {
+        if (currentTask.status !== 'missed') currentTask.status = 'replanned';
+        if (weekDatesIso.includes(new_date)) {
+          currentWeekTasks.push(Object.assign({}, currentTask, {
+            id: -Date.now(), date: new_date, time: new_time, status: 'pending'
+          }));
         }
-        pendingMissedReload = false;
-        document.getElementById('rescheduleModal').style.display = 'none';
-        await refreshMetricsAndTasks();
+        renderGrid();
+      }
+      showToast('Saving…', 10000);
+
+      let res, result = {};
+      try {
+        res = await fetch('/api/task/reschedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ task_id: taskId, new_date, new_time })
+        });
+        result = await res.json();
+      } catch (e) {
+        res = null;
+      }
+
+      if (res && res.ok) {
+        if (result.result === "replanned") {
+          showToast("Moved. It wasn't due yet, so your Behaviour Index isn't affected.", 4500);
+        } else if (result.result === "missed_kept") {
+          showToast("Follow-up scheduled. The original miss stays on your record.", 4500);
+        } else {
+          showToast("Pushed. It was already due, so it counts as a push.", 4500);
+        }
+        refreshMetricsAndTasks();
       } else {
-        const err = await res.json();
-        await appAlert(err.error || "Failed to reschedule task.");
+        const t = document.getElementById('appToast');
+        if (t) t.classList.remove('show');
+        await refreshMetricsAndTasks();
+        await appAlert((result && result.error) ||
+          "Couldn't reschedule. Check your connection and try again.");
       }
     }
 
