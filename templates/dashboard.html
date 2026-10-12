@@ -1281,6 +1281,69 @@
       .sidebar, .sheet-backdrop, .bhi-marker { transition: none !important; }
       .wheel-col { scroll-behavior: auto; }
     }
+    /* Drag a card to reschedule */
+    .task-card[data-drag] {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    @media (hover: hover) { .task-card[data-drag] { cursor: grab; } }
+    .task-card.drag-source { opacity: 0.35; }
+    .task-card.drag-ghost {
+      position: fixed !important;
+      left: 0;
+      top: 0;
+      z-index: 3000;
+      margin: 0;
+      pointer-events: none;
+      transition: none;
+      opacity: 0.95;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+    }
+    .drag-label {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 3001;
+      pointer-events: none;
+      background: var(--text);
+      color: var(--bg);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    body.dragging-task, body.dragging-task * { cursor: grabbing !important; }
+    .day-track.drop-over, .day-track-h.drop-over {
+      background-color: color-mix(in srgb, var(--primary) 9%, transparent);
+    }
+    .day-pill.drop-over { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .drag-days {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      z-index: 2950;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0.5rem 0.5rem 0.6rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+    .drag-days-title {
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--metric-muted);
+      margin-bottom: 0.35rem;
+    }
+    .drag-days-row {
+      display: grid;
+      grid-template-columns: repeat(var(--n), 1fr);
+      gap: 4px;
+    }
+    body.dragging-task .fab { display: none; }
   </style>
 </head>
 <body>
@@ -1930,6 +1993,8 @@
       ].join(' ').trim();
 
       const timeLabel = `${fmtTime(task.time)} – ${fmtTime(minutesToTimeStr(r.end))}`;
+      // Only open tasks can be dragged; the server still checks the rules.
+      const canDrag = task.status === 'pending' || task.status === 'missed';
       const { lane, laneCount } = laneInfo;
       let posStyle;
       if (gridOrientation === 'day_rows') {
@@ -1951,7 +2016,9 @@
       }
 
       return `
-        <div class="task-card ${statusClasses}" style="${posStyle} --p: ${prio.color};" onclick="showTaskDetail(${task.id})">
+        <div class="task-card ${statusClasses}" style="${posStyle} --p: ${prio.color};"
+          data-id="${task.id}"${canDrag ? ' data-drag title="Drag to reschedule"' : ''}
+          onclick="showTaskDetail(${task.id})">
           <div class="card-title">${escapeHtml(task.title)}${task.status === 'completed' && task.completed_late ? '<span class="late-tag">Late</span>' : ''}</div>
           <div class="card-detail">🕒 ${timeLabel}</div>
           ${task.detail ? `<div class="card-detail">${escapeHtml(task.detail)}</div>` : ''}
@@ -2126,6 +2193,7 @@
               td.rowSpan = visibleHours;
               const track = document.createElement('div');
               track.className = 'day-track';
+              track.dataset.date = cellDate;
               track.style.height = (visibleHours * HOUR_PX_V) + 'px';
               track.style.backgroundImage = `repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent ${HOUR_PX_V}px)`;
               const dayTasks = tasksForDay(cellDate);
@@ -2162,6 +2230,7 @@
         trackTd.colSpan = visibleHours;
         const track = document.createElement('div');
         track.className = 'day-track-h';
+        track.dataset.date = cellDate;
         track.style.width = (visibleHours * HOUR_PX_H) + 'px';
         track.style.height = '75px';
         track.style.backgroundImage = `repeating-linear-gradient(to right, var(--border) 0, var(--border) 1px, transparent 1px, transparent ${HOUR_PX_H}px)`;
@@ -2187,7 +2256,7 @@
         const count = currentWeekTasks.filter(t => t.date === iso).length;
         const cls = ['day-pill', iso === active ? 'active' : '',
           iso === todayIso ? 'today' : '', count ? 'has-tasks' : ''].join(' ');
-        return `<button type="button" class="${cls}" onclick="pickMobileDay('${iso}')"
+        return `<button type="button" class="${cls}" data-iso="${iso}" onclick="pickMobileDay('${iso}')"
           aria-pressed="${iso === active}" aria-label="${DAY_NAMES[d.getDay()]} ${d.getDate()}">
           <span>${DAY_NAMES[d.getDay()].slice(0, 2)}</span><b>${d.getDate()}</b><i></i></button>`;
       }).join('');
@@ -2504,6 +2573,8 @@
       }, { passive: true });
       grid.addEventListener('touchend', e => {
         if (touchX === null || !isMobileView()) return;
+        // A card being dragged isn't a swipe.
+        if (drag.active || drag.justEnded) { touchX = null; return; }
         const dx = e.changedTouches[0].clientX - touchX;
         const dy = e.changedTouches[0].clientY - touchY;
         if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
@@ -2511,6 +2582,221 @@
         }
         touchX = null;
       }, { passive: true });
+    });
+
+    // ---- Drag a card to a new day and time to reschedule it ----
+    // Computer: press and move. Phone: press and hold, then move (drop on
+    // the timetable or on a day in the strip at the top). Dropping opens
+    // the usual reschedule popup with the new day and time filled in, so
+    // nothing changes until the user confirms there.
+    const drag = {
+      task: null, card: null, ghost: null, label: null, timer: null,
+      mouse: false, active: false, justEnded: false, target: null,
+      startX: 0, startY: 0, grabX: 0, grabY: 0, x: 0, y: 0, raf: 0
+    };
+
+    function snapTo5(mins) {
+      return Math.max(0, Math.min(1435, Math.round(mins / 5) * 5));
+    }
+
+    function dropTargetAt(x, y) {
+      const el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      const pill = el.closest('.day-pill[data-iso]');
+      if (pill) return { el: pill, date: pill.dataset.iso, time: drag.task.time };
+      const track = el.closest('.day-track[data-date], .day-track-h[data-date]');
+      if (!track) return null;
+      const box = track.getBoundingClientRect();
+      const mins = track.classList.contains('day-track-h')
+        ? hourRangeMin * 60 + (x - drag.grabX - box.left) / HOUR_PX_H * 60
+        : hourRangeMin * 60 + (y - drag.grabY - box.top) / HOUR_PX_V * 60;
+      return {
+        el: track, date: track.dataset.date,
+        time: minutesToTimeStr(snapTo5(mins)), exact: true
+      };
+    }
+
+    function dropLabel(t) {
+      if (!t) return 'Drop on a day';
+      const d = new Date(t.date + 'T00:00:00');
+      const day = DAY_NAMES[d.getDay()].slice(0, 3) + ' ' + d.getDate();
+      return t.exact ? day + ' · ' + fmtTime(t.time) : day;
+    }
+
+    function beginDrag(x, y) {
+      const r = drag.card.getBoundingClientRect();
+      drag.active = true;
+      drag.grabX = drag.startX - r.left;
+      drag.grabY = drag.startY - r.top;
+
+      const g = drag.card.cloneNode(true);
+      g.removeAttribute('onclick');
+      g.removeAttribute('title');
+      g.classList.add('drag-ghost');
+      g.style.left = '0';
+      g.style.top = '0';
+      g.style.width = r.width + 'px';
+      g.style.height = r.height + 'px';
+      document.body.appendChild(g);
+      drag.ghost = g;
+
+      drag.label = document.createElement('div');
+      drag.label.className = 'drag-label';
+      document.body.appendChild(drag.label);
+
+      // On phones the day strip may be scrolled away, so show the days in
+      // a bar at the bottom of the screen while a card is held.
+      if (isMobileView()) {
+        const bar = document.createElement('div');
+        bar.className = 'drag-days';
+        bar.style.setProperty('--n', weekDatesIso.length);
+        bar.innerHTML = '<div class="drag-days-title">Move to another day</div>'
+          + '<div class="drag-days-row">' + weekDatesIso.map(iso => {
+            const d = new Date(iso + 'T00:00:00');
+            const cls = iso === drag.task.date ? 'day-pill active' : 'day-pill';
+            return `<div class="${cls}" data-iso="${iso}">`
+              + `<span>${DAY_NAMES[d.getDay()].slice(0, 2)}</span>`
+              + `<b>${d.getDate()}</b></div>`;
+          }).join('') + '</div>';
+        document.body.appendChild(bar);
+        drag.bar = bar;
+      }
+
+      drag.card.classList.add('drag-source');
+      document.body.classList.add('dragging-task');
+      if (!drag.mouse && navigator.vibrate) navigator.vibrate(15);
+      moveDrag(x, y);
+      drag.raf = requestAnimationFrame(autoScrollWhileDragging);
+    }
+
+    function moveDrag(x, y) {
+      drag.x = x;
+      drag.y = y;
+      const left = x - drag.grabX, top = y - drag.grabY;
+      drag.ghost.style.transform = `translate(${left}px, ${top}px)`;
+      drag.label.style.transform = `translate(${left}px, ${Math.max(4, top - 30)}px)`;
+      const t = dropTargetAt(x, y);
+      if (drag.target && (!t || t.el !== drag.target.el)) {
+        drag.target.el.classList.remove('drop-over');
+      }
+      if (t) t.el.classList.add('drop-over');
+      drag.target = t;
+      drag.label.textContent = dropLabel(t);
+    }
+
+    // Scroll the timetable when the card is held near its edge.
+    function autoScrollWhileDragging() {
+      if (!drag.active) return;
+      const box = document.getElementById('gridContainer');
+      const r = box.getBoundingClientRect();
+      const edge = 48, speed = 12;
+      let dx = 0, dy = 0;
+      if (drag.y > r.top && drag.y < r.top + edge) dy = -speed;
+      else if (drag.y < r.bottom && drag.y > r.bottom - edge) dy = speed;
+      if (drag.x > r.left && drag.x < r.left + edge) dx = -speed;
+      else if (drag.x < r.right && drag.x > r.right - edge) dx = speed;
+      // On phones the whole page scrolls instead.
+      let pageDy = 0;
+      if (isMobileView()) {
+        const barTop = drag.bar ? drag.bar.getBoundingClientRect().top : innerHeight;
+        if (drag.y < 60) pageDy = -speed;
+        else if (drag.y < barTop && drag.y > barTop - 50) pageDy = speed;
+      }
+      if (dx || dy || pageDy) {
+        box.scrollBy(dx, dy);
+        if (pageDy) window.scrollBy(0, pageDy);
+        moveDrag(drag.x, drag.y);
+      }
+      drag.raf = requestAnimationFrame(autoScrollWhileDragging);
+    }
+
+    function endDrag(drop) {
+      clearTimeout(drag.timer);
+      if (drag.active) {
+        cancelAnimationFrame(drag.raf);
+        drag.ghost.remove();
+        drag.label.remove();
+        if (drag.bar) drag.bar.remove();
+        drag.card.classList.remove('drag-source');
+        document.body.classList.remove('dragging-task');
+        if (drag.target) drag.target.el.classList.remove('drop-over');
+        // Stop the click that follows a drop from opening the task.
+        drag.justEnded = true;
+        setTimeout(() => { drag.justEnded = false; }, 400);
+        const t = drop ? drag.target : null;
+        const task = drag.task;
+        if (t && !(t.date === task.date && t.time === task.time)) {
+          openRescheduleModal(task.id, t.date, t.time);
+        }
+      }
+      Object.assign(drag, { task: null, card: null, ghost: null, label: null,
+        bar: null, active: false, target: null });
+    }
+
+    function dragCandidate(e) {
+      if (drag.task) return null;
+      const card = e.target.closest && e.target.closest('.task-card[data-drag]');
+      if (!card || card.classList.contains('drag-ghost')) return null;
+      const task = allUserTasks.find(t => t.id === Number(card.dataset.id));
+      return task ? { card, task } : null;
+    }
+
+    // Mouse
+    document.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      const c = dragCandidate(e);
+      if (!c) return;
+      Object.assign(drag, c, { mouse: true, startX: e.clientX, startY: e.clientY });
+      e.preventDefault();  // don't start selecting text
+    });
+    document.addEventListener('mousemove', e => {
+      if (!drag.task || !drag.mouse) return;
+      if (drag.active) moveDrag(e.clientX, e.clientY);
+      else if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) > 6) {
+        beginDrag(e.clientX, e.clientY);
+      }
+    });
+    document.addEventListener('mouseup', () => {
+      if (drag.task && drag.mouse) endDrag(true);
+    });
+
+    // Touch: hold still briefly to pick a card up, so normal scrolling and
+    // swiping between days still work.
+    document.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) return;
+      const c = dragCandidate(e);
+      if (!c) return;
+      const t = e.touches[0];
+      Object.assign(drag, c, { mouse: false, startX: t.clientX, startY: t.clientY });
+      drag.timer = setTimeout(() => beginDrag(drag.startX, drag.startY), 400);
+    }, { passive: true });
+    document.addEventListener('touchmove', e => {
+      if (!drag.task || drag.mouse) return;
+      const t = e.touches[0];
+      if (!drag.active) {
+        if (Math.hypot(t.clientX - drag.startX, t.clientY - drag.startY) > 10) {
+          endDrag(false);  // the finger moved first: it's a scroll
+        }
+        return;
+      }
+      e.preventDefault();
+      moveDrag(t.clientX, t.clientY);
+    }, { passive: false });
+    document.addEventListener('touchend', () => {
+      if (drag.task && !drag.mouse) endDrag(true);
+    });
+    document.addEventListener('touchcancel', () => {
+      if (drag.task && !drag.mouse) endDrag(false);
+    });
+
+    document.addEventListener('click', e => {
+      if (drag.justEnded) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
+    document.addEventListener('contextmenu', e => {
+      if (drag.task) e.preventDefault();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && drag.active) endDrag(false);
     });
 
     function printModalTable() {
@@ -2938,13 +3224,15 @@
       showTaskDetail(taskId);
     }
 
-    function openRescheduleModal(taskId) {
+    function openRescheduleModal(taskId, presetDate, presetTime) {
       const task = allUserTasks.find(t => t.id === taskId);
       if (!task) return;
 
       document.getElementById('rescheduleTaskId').value = taskId;
-      document.getElementById('rescheduleDate').value = task.date || "{{ cur_week_str }}";
-      setTimeSelect(document.getElementById('rescheduleTime'), task.time || "09:00");
+      document.getElementById('rescheduleDate').value =
+        presetDate || task.date || "{{ cur_week_str }}";
+      setTimeSelect(document.getElementById('rescheduleTime'),
+        presetTime || task.time || "09:00");
 
       const titleEl = document.getElementById('rescheduleHeaderTitle');
       const subtitleEl = document.getElementById('rescheduleSubtitle');
