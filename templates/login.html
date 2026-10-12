@@ -122,32 +122,14 @@
     /* Continue with Google */
     .btn-google {
       display: flex;
-      align-items: center;
       justify-content: center;
-      gap: 0.55rem;
-      width: 100%;
-      box-sizing: border-box;
-      padding: 0.72rem;
       border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--input-bg);
-      color: var(--text);
-      font-weight: bold;
-      font-size: 0.9rem;
-      text-decoration: none;
     }
-    .btn-google:hover { border-color: var(--primary); }
-    .btn-google .g-mark {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      border: 1.5px solid currentColor;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.72rem;
-      line-height: 1;
-    }
+    .btn-google img { display: block; height: 44px; width: auto; }
+    .btn-google .g-dark { display: none; }
+    [data-theme="dark"] .btn-google .g-light { display: none; }
+    [data-theme="dark"] .btn-google .g-dark { display: block; }
+    .btn-google:hover img { filter: brightness(0.97); }
     .google-note {
       font-size: 0.74rem;
       color: var(--subtext);
@@ -183,7 +165,11 @@
 
     {% if google_enabled %}
     <a class="btn-google" id="googleBtn" href="/auth/google">
-      <span class="g-mark" aria-hidden="true">G</span>Continue with Google
+      <!-- Google's own pre-approved button artwork, light and dark -->
+      <img class="g-light" alt="Sign in with Google" width="180" height="40"
+        src="{{ url_for('static', filename='google-signin-light.svg') }}">
+      <img class="g-dark" alt="Sign in with Google" width="180" height="40"
+        src="{{ url_for('static', filename='google-signin-dark.svg') }}">
     </a>
     <p class="google-note">New to Agenndar? This creates your account. By continuing
       you confirm you're 18 or over and agree to the
