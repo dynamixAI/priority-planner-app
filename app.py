@@ -355,6 +355,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN has_password INTEGER DEFAULT 1;",
         # 1 once the user has seen (or skipped) the first-run tour.
         "ALTER TABLE users ADD COLUMN tour_seen INTEGER DEFAULT 0;",
+        # When the user last opened their dashboard (for the admin stats).
+        "ALTER TABLE users ADD COLUMN last_seen_at REAL DEFAULT 0;",
     ]:
         try:
             conn.execute(stmt)
@@ -413,6 +415,8 @@ def init_db():
         "ALTER TABLE tasks ADD COLUMN reminder_sent INTEGER DEFAULT 0;",
         "ALTER TABLE tasks ADD COLUMN followup_dismissed INTEGER DEFAULT 0;",
         "ALTER TABLE tasks ADD COLUMN completed_late INTEGER DEFAULT 0;",
+        # When the task was added (for the admin stats). 0 for older tasks.
+        "ALTER TABLE tasks ADD COLUMN created_at REAL DEFAULT 0;",
     ]:
         try:
             conn.execute(stmt)
@@ -872,6 +876,12 @@ def dashboard():
     conn = get_db()
 
     user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation, time_format, timezone, tour_seen FROM users WHERE id = ?", (user_id,))
+    # Note the visit for the admin stats, at most once every 10 minutes.
+    if time.time() - session.get("seen_at", 0) > 600:
+        session["seen_at"] = time.time()
+        conn.execute("UPDATE users SET last_seen_at = ? WHERE id = ?",
+                     (session["seen_at"], user_id))
+        conn.commit()
     user_tz = clean_timezone(user.get("timezone") if user else "")
     time_format = user.get("time_format") if user and user.get("time_format") in VALID_TIME_FORMATS else DEFAULT_TIME_FORMAT
     now_dt = user_now(user_tz)
@@ -1171,10 +1181,11 @@ def add_task():
         return jsonify({"error": "Please choose a valid priority."}), 400
 
     conn.execute(
-        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL)",
+        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)",
         (session["user_id"], title, clean_text(data.get("detail"), MAX_TEXT_LEN),
          clean_text(data.get("location"), MAX_TITLE_LEN), date, time_val,
-         clean_text(data.get("duration"), 40), duration_minutes, priority_id)
+         clean_text(data.get("duration"), 40), duration_minutes, priority_id,
+         time.time())
     )
     conn.commit()
     return jsonify({"status": "success"})
