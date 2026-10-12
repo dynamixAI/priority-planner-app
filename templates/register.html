@@ -156,6 +156,57 @@
       .consent-group input[type="checkbox"] { width: 20px; height: 20px; }
       .consent-group label { font-size: 0.92rem; }
     }
+
+    /* Continue with Google */
+    .btn-google {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.55rem;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.72rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
+      font-weight: bold;
+      font-size: 0.9rem;
+      text-decoration: none;
+    }
+    .btn-google:hover { border-color: var(--primary); }
+    .btn-google .g-mark {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1.5px solid currentColor;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      line-height: 1;
+    }
+    .google-note {
+      font-size: 0.74rem;
+      color: var(--subtext);
+      line-height: 1.45;
+      margin: 0.5rem 0 0;
+    }
+    .google-note a { color: var(--primary); }
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      margin: 1.1rem 0;
+      font-size: 0.75rem;
+      color: var(--subtext);
+    }
+    .or-divider::before, .or-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
   </style>
 </head>
 <body>
@@ -168,6 +219,17 @@
         <div class="alert-banner visible">{{ messages[0] }}</div>
       {% endif %}
     {% endwith %}
+
+    {% if google_enabled %}
+    <a class="btn-google" id="googleBtn" href="/auth/google">
+      <span class="g-mark" aria-hidden="true">G</span>Continue with Google
+    </a>
+    <p class="google-note">New to Agenndar? This creates your account. By continuing
+      you confirm you're 18 or over and agree to the
+      <a href="/terms" target="_blank">Terms</a> and
+      <a href="/privacy" target="_blank">Privacy Policy</a>.</p>
+    <div class="or-divider">or</div>
+    {% endif %}
 
     <form method="POST" onsubmit="return validatePasswords(event)">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -248,6 +310,17 @@
       }
       return true;
     }
+  </script>
+  <script>
+    // New Google accounts start in this device's timezone.
+    (function () {
+      const g = document.getElementById('googleBtn');
+      if (!g) return;
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        if (tz) g.href = '/auth/google?tz=' + encodeURIComponent(tz);
+      } catch (e) {}
+    })();
   </script>
 </body>
 </html>

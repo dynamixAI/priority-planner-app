@@ -532,7 +532,27 @@
       });
     }
 
+    // Accounts made with Google may not have a password yet.
+    const HAS_PASSWORD = {{ 'true' if has_password else 'false' }};
+
     async function deleteAccount() {
+      if (!HAS_PASSWORD) {
+        const sure = await appConfirm(
+          "This permanently deletes your account and everything in it. There is no recovery. Delete your account?",
+          "Delete Forever", "Cancel"
+        );
+        if (!sure) return;
+        const token = document.querySelector('meta[name="csrf-token"]').content;
+        const r = await fetch('/api/account/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+          body: JSON.stringify({ confirm: true })
+        });
+        if (r.ok) { window.location.href = '/'; return; }
+        const e = await r.json();
+        showAppAlert(e.error || "Something went wrong — your account was not deleted.");
+        return;
+      }
       const password = await appPasswordConfirm(
         "This permanently deletes your account and everything in it. There is no recovery. Enter your password to confirm.",
         "Delete Forever", "Cancel"
