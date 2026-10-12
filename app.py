@@ -353,6 +353,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'Europe/London';",
         # 0 for accounts made with Google that haven't set a password yet.
         "ALTER TABLE users ADD COLUMN has_password INTEGER DEFAULT 1;",
+        # 1 once the user has seen (or skipped) the first-run tour.
+        "ALTER TABLE users ADD COLUMN tour_seen INTEGER DEFAULT 0;",
     ]:
         try:
             conn.execute(stmt)
@@ -869,7 +871,7 @@ def dashboard():
     week_param = request.args.get("week_start")
     conn = get_db()
 
-    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation, time_format, timezone FROM users WHERE id = ?", (user_id,))
+    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation, time_format, timezone, tour_seen FROM users WHERE id = ?", (user_id,))
     user_tz = clean_timezone(user.get("timezone") if user else "")
     time_format = user.get("time_format") if user and user.get("time_format") in VALID_TIME_FORMATS else DEFAULT_TIME_FORMAT
     now_dt = user_now(user_tz)
@@ -955,8 +957,19 @@ def dashboard():
         next_week=next_week,
         cur_week_str=cur_week_str,
         time_slots=TIME_SLOTS,
-        metrics=metrics
+        metrics=metrics,
+        show_tour=bool(user) and not user.get("tour_seen")
     )
+
+
+@app.route("/api/tour/seen", methods=["POST"])
+def tour_seen():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db()
+    conn.execute("UPDATE users SET tour_seen = 1 WHERE id = ?", (session["user_id"],))
+    conn.commit()
+    return jsonify({"status": "success"})
 
 
 @app.route("/trends")

@@ -1344,6 +1344,210 @@
       gap: 4px;
     }
     body.dragging-task .fab { display: none; }
+    /* ---- First-run guided tour ---- */
+    .tour-spot {
+      position: fixed;
+      z-index: 4000;
+      border-radius: 14px;
+      pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(6, 12, 13, 0.62);
+      transition-property: top, left, width, height;
+      transition-duration: 0.45s;
+      transition-timing-function: cubic-bezier(.2, .8, .2, 1);
+    }
+    .tour-spot::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 17px;
+      border: 2px solid var(--primary);
+      animation: tourPulse 1.6s ease-out infinite;
+    }
+    .tour-spot.centered::after { display: none; }
+    @keyframes tourPulse {
+      0% { opacity: 0.9; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.06); }
+    }
+    .tour-blocker { position: fixed; inset: 0; z-index: 3999; }
+    .tour-card {
+      position: fixed;
+      z-index: 4001;
+      width: min(360px, calc(100vw - 32px));
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.1rem 1.15rem 0.95rem;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+      transition-property: top, left;
+      transition-duration: 0.45s;
+      transition-timing-function: cubic-bezier(.2, .8, .2, 1);
+    }
+    .tour-card.enter { animation: tourIn 0.35s ease both; }
+    @keyframes tourIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+    .tour-step {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 0.25rem;
+    }
+    .tour-card h3 { margin: 0 0 0.35rem; font-size: 1.05rem; font-weight: 650; }
+    .tour-card p {
+      margin: 0;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      color: var(--metric-muted);
+    }
+    .tour-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.95rem;
+    }
+    .tour-dots { display: flex; gap: 4px; margin-right: auto; }
+    .tour-dots i {
+      width: 6px;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      transition: width 0.3s;
+    }
+    .tour-dots i.on { width: 16px; background: var(--primary); }
+    .tour-btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 0.5rem 0.8rem;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .tour-btn.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    [data-theme="dark"] .tour-btn.primary { color: #062226; }
+    .tour-btn.link {
+      border: none;
+      padding: 0.5rem 0.3rem;
+      color: var(--metric-muted);
+      font-weight: 500;
+    }
+
+    /* Little animated demos inside the tour card */
+    .tour-demo {
+      position: relative;
+      height: 74px;
+      margin: 0.8rem 0 0.1rem;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--primary) 7%, transparent);
+      overflow: hidden;
+    }
+    .demo-cols {
+      position: absolute;
+      inset: 8px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .demo-cols span { border-radius: 6px; border: 1px dashed var(--border); }
+    .demo-card {
+      position: absolute;
+      top: 16px;
+      left: 14px;
+      width: 26%;
+      height: 26px;
+      border-radius: 6px;
+      background: color-mix(in srgb, #3b82f6 22%, var(--card-bg));
+      border-left: 3px solid #3b82f6;
+      animation: demoDrag 3.2s ease-in-out infinite;
+    }
+    .demo-hand {
+      position: absolute;
+      top: 30px;
+      left: 40px;
+      font-size: 18px;
+      animation: demoDrag 3.2s ease-in-out infinite;
+    }
+    @keyframes demoDrag {
+      0%, 15% { transform: translate(0, 0); }
+      55%, 75% { transform: translate(calc(var(--demo-w, 260px) * 0.33), 18px); }
+      100% { transform: translate(0, 0); }
+    }
+    .demo-buttons {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      flex-wrap: wrap;
+    }
+    .demo-buttons b {
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 0.35rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      animation: demoLight 4s infinite;
+    }
+    .demo-buttons b:nth-child(2) { animation-delay: 1s; }
+    .demo-buttons b:nth-child(3) { animation-delay: 2s; }
+    .demo-buttons b:nth-child(4) { animation-delay: 3s; }
+    @keyframes demoLight {
+      0%, 22% {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+      }
+      30%, 100% { border-color: var(--border); box-shadow: none; }
+    }
+    .demo-meter {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      top: 32px;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #e5484d 0 40%, #e0a10a 40% 70%,
+        #1a9a55 70% 100%);
+    }
+    .demo-meter i {
+      position: absolute;
+      top: -5px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--card-bg);
+      border: 3px solid var(--text);
+      animation: demoScore 4s ease-in-out infinite;
+    }
+    @keyframes demoScore {
+      0%, 10% { left: 20%; }
+      45%, 60% { left: 82%; }
+      100% { left: 20%; }
+    }
+    .demo-legend {
+      position: absolute;
+      bottom: 6px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--metric-muted);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .tour-spot, .tour-card { transition: none; }
+      .tour-spot::after, .demo-card, .demo-hand, .demo-buttons b,
+      .demo-meter i, .tour-card.enter {
+        animation: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1470,6 +1674,10 @@
             <a href="/settings" class="dropdown-item">
               <span>⚙️ Settings</span>
             </a>
+            <button type="button" class="dropdown-item"
+              onclick="event.stopPropagation(); startTour()">
+              <span>❓ How Agenndar works</span>
+            </button>
             <div class="dropdown-divider"></div>
             <a href="/logout" class="dropdown-item danger">
               <span>🚪 Log Out</span>
@@ -1764,6 +1972,7 @@
     const TIME_FORMAT = {{ time_format|tojson }};
     const USER_TZ = {{ user_timezone|tojson }};
     let weekDatesIso = {{ week_dates_iso|tojson }};
+    const SHOW_TOUR = {{ 'true' if show_tour else 'false' }};
 
     // Phones show one day at a time (picked from the day strip or by
     // swiping); larger screens show the whole week.
@@ -2802,6 +3011,260 @@
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && drag.active) endDrag(false);
     });
+
+    // ---- First-run guided tour ----
+    // Highlights the real parts of the screen one at a time. Runs once per
+    // account (the server remembers), and can be replayed from the menu.
+    const tour = { steps: [], i: 0, spot: null, card: null, blocker: null };
+
+    function tourVisible(el) {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0
+        && getComputedStyle(el).visibility !== 'hidden';
+    }
+
+    function tourAddTarget() {
+      if (isMobileView()) return document.getElementById('fabAddTask');
+      const side = document.getElementById('taskSidebar');
+      return side.classList.contains('collapsed')
+        ? document.getElementById('btnHamburger') : side;
+    }
+
+    function tourDemo(kind) {
+      if (kind === 'drag') {
+        return '<div class="tour-demo"><div class="demo-cols">'
+          + '<span></span><span></span><span></span></div>'
+          + '<div class="demo-card"></div>'
+          + '<div class="demo-hand">👆</div></div>';
+      }
+      if (kind === 'checkin') {
+        return '<div class="tour-demo"><div class="demo-buttons"><b>Done</b>'
+          + '<b>Done late</b><b>Push</b><b>Missed</b></div></div>';
+      }
+      if (kind === 'score') {
+        return '<div class="tour-demo"><div class="demo-meter"><i></i></div>'
+          + '<div class="demo-legend">Do what you planned and it climbs</div></div>';
+      }
+      return '';
+    }
+
+    function buildTourSteps() {
+      const phone = isMobileView();
+      const banner = document.getElementById('reconcileBanner');
+      return [
+        { title: 'Welcome to Agenndar 👋',
+          text: "A planner that keeps you honest: plan your week, do the work, "
+            + "and your score shows how it really went. This tour takes about "
+            + "a minute." },
+        { target: tourAddTarget, title: 'Add a task',
+          text: phone
+            ? 'Tap + to add a task: pick the day, start time, how long it takes '
+              + 'and how important it is.'
+            : 'Add tasks here: pick the day, start time, how long it takes and how '
+              + 'important it is.' },
+        { target: () => document.querySelector('.legend-bar'),
+          title: 'Colour = priority',
+          text: 'Every task is coloured by its priority. You can rename priorities '
+            + 'and change their colours in Settings.' },
+        { target: () => document.getElementById('gridContainer'), title: 'Your week',
+          text: 'Tasks sit here at their time. Tap one to see its details, mark it '
+            + 'done, or change it.' },
+        { target: () => document.getElementById('gridContainer'),
+          title: 'Plans changed? Move it', demo: 'drag',
+          text: phone
+            ? 'Press and hold a task until it lifts, then drop it on a new time or '
+              + 'on a day in the bar that appears.'
+            : 'Drag a task to another day or time, then confirm the new slot.' },
+        phone
+          ? { target: () => document.getElementById('dayStrip'), title: 'Change day',
+              text: 'Tap a day here, or swipe left and right on the timetable.' }
+          : { target: () => document.querySelector('.week-nav'), title: 'Change week',
+              text: 'Look back at last week or plan ahead for the next one.' },
+        { target: () => (tourVisible(banner) ? banner : null), optional: true,
+          title: 'When a task’s time passes', demo: 'checkin',
+          text: 'Agenndar asks what happened: done, done late, pushed to later, '
+            + 'or missed. Answer honestly; that’s what makes your score mean '
+            + 'something.' },
+        { target: () => document.getElementById('bhiCard'),
+          title: 'Your Behaviour Index', demo: 'score',
+          text: 'Doing tasks on time raises it most. Done late counts a little less, '
+            + 'pushing costs a bit and missing costs most. Moving a task before '
+            + 'it’s due is free. Tap it to see your trends.' },
+        { target: () => document.querySelector('.metrics-bar'), title: 'Your counts',
+          text: 'Tap Done, Undone, Pushed or Missed to see exactly which tasks '
+            + 'are in each.' },
+        { target: () => document.getElementById('profileHub'), title: 'Your menu',
+          text: 'Turn on reminders (a nudge 15 minutes before each task), switch to '
+            + 'dark mode, install Agenndar on your phone, export, and Settings.' },
+        { title: "You're all set",
+          text: 'Add your first task to get going. You can replay this tour any time '
+            + 'from the menu.',
+          finish: true }
+      ];
+    }
+
+    function startTour() {
+      closeTourParts();
+      document.getElementById('profileDropdown').classList.remove('open');
+      if (isMobileView()) document.body.classList.remove('sheet-open');
+      tour.steps = buildTourSteps();
+      tour.i = 0;
+      tour.blocker = document.createElement('div');
+      tour.blocker.className = 'tour-blocker';
+      tour.spot = document.createElement('div');
+      tour.spot.className = 'tour-spot centered';
+      tour.card = document.createElement('div');
+      tour.card.className = 'tour-card';
+      tour.card.setAttribute('role', 'dialog');
+      tour.card.setAttribute('aria-live', 'polite');
+      document.body.append(tour.blocker, tour.spot, tour.card);
+      window.addEventListener('resize', placeTour);
+      window.addEventListener('scroll', placeTour, true);
+      document.addEventListener('keydown', tourKeys);
+      showTourStep(0);
+    }
+
+    function tourTarget(step) {
+      const el = step && step.target ? step.target() : null;
+      return tourVisible(el) ? el : null;
+    }
+
+    function showTourStep(i) {
+      // Skip steps whose part of the screen isn't showing (e.g. no check-in yet).
+      const dir = i >= tour.i ? 1 : -1;
+      while (i > 0 && i < tour.steps.length - 1 && tour.steps[i].target
+             && !tour.steps[i].optional && !tourTarget(tour.steps[i])) {
+        i += dir;
+      }
+      tour.i = i;
+      const step = tour.steps[i];
+      const shown = tour.steps.filter((s, k) =>
+        !s.target || s.optional || k === i || tourTarget(s));
+      const pos = shown.indexOf(step);
+      const last = i === tour.steps.length - 1;
+      tour.card.innerHTML =
+        '<div class="tour-step">' + (pos + 1) + ' of ' + shown.length + '</div>'
+        + '<h3>' + step.title + '</h3><p>' + step.text + '</p>' + tourDemo(step.demo)
+        + '<div class="tour-actions"><div class="tour-dots">'
+        + shown.map((s, k) => '<i class="' + (k === pos ? 'on' : '') + '"></i>')
+          .join('')
+        + '</div>'
+        + (last ? '' : '<button class="tour-btn link" data-t="skip">Skip</button>')
+        + (i > 0 && !last
+          ? '<button class="tour-btn" data-t="back">Back</button>' : '')
+        + '<button class="tour-btn primary" data-t="next">'
+        + (i === 0 ? 'Show me' : last ? 'Add my first task' : 'Next')
+        + '</button></div>';
+      tour.card.querySelectorAll('[data-t]').forEach(b => {
+        b.onclick = () => tourAction(b.dataset.t);
+      });
+      const demo = tour.card.querySelector('.tour-demo');
+      if (demo) demo.style.setProperty('--demo-w', demo.offsetWidth + 'px');
+      tour.card.classList.remove('enter');
+      void tour.card.offsetWidth;
+      tour.card.classList.add('enter');
+
+      const el = tourTarget(step);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        if (r.top < 70 || r.bottom > innerHeight - 70) {
+          el.scrollIntoView({
+            block: r.height > innerHeight * 0.6 ? 'start' : 'center',
+            behavior: 'smooth'
+          });
+        }
+      }
+      placeTour();
+      setTimeout(placeTour, 400);
+      tour.card.querySelector('.tour-btn.primary').focus({ preventScroll: true });
+    }
+
+    function placeTour() {
+      if (!tour.card) return;
+      const step = tour.steps[tour.i];
+      const el = tourTarget(step);
+      const pad = 8, gap = 14;
+      const cw = tour.card.offsetWidth, ch = tour.card.offsetHeight;
+      if (!el) {
+        tour.spot.classList.add('centered');
+        Object.assign(tour.spot.style, {
+          top: innerHeight / 2 + 'px', left: innerWidth / 2 + 'px',
+          width: '0px', height: '0px'
+        });
+        tour.card.style.left = Math.max(16, (innerWidth - cw) / 2) + 'px';
+        tour.card.style.top = Math.max(16, (innerHeight - ch) / 2) + 'px';
+        return;
+      }
+      tour.spot.classList.remove('centered');
+      const r = el.getBoundingClientRect();
+      const top = Math.max(4, r.top - pad);
+      const bottom = Math.min(innerHeight - 4, r.bottom + pad);
+      Object.assign(tour.spot.style, {
+        top: top + 'px', left: Math.max(4, r.left - pad) + 'px',
+        width: Math.min(innerWidth - 8, r.width + pad * 2) + 'px',
+        height: Math.max(0, bottom - top) + 'px'
+      });
+      // Card below the highlight if it fits, else above, else over its bottom.
+      let cardTop;
+      if (bottom + gap + ch < innerHeight - 8) cardTop = bottom + gap;
+      else if (top - gap - ch > 8) cardTop = top - gap - ch;
+      else cardTop = innerHeight - ch - 16;
+      let cardLeft = r.left + r.width / 2 - cw / 2;
+      cardLeft = Math.max(16, Math.min(innerWidth - cw - 16, cardLeft));
+      tour.card.style.top = cardTop + 'px';
+      tour.card.style.left = cardLeft + 'px';
+    }
+
+    function tourAction(what) {
+      if (what === 'back') return showTourStep(Math.max(0, tour.i - 1));
+      if (what === 'next' && tour.i < tour.steps.length - 1) {
+        return showTourStep(tour.i + 1);
+      }
+      const finished = what === 'next';
+      endTour();
+      if (finished) {
+        toggleSidebar(true);
+        setTimeout(() => document.getElementById('inputTitle').focus(), 350);
+      }
+    }
+
+    function tourKeys(e) {
+      if (!tour.card) return;
+      if (e.key === 'Escape') endTour();
+      else if (e.key === 'ArrowRight') tourAction('next');
+      else if (e.key === 'ArrowLeft' && tour.i > 0) tourAction('back');
+    }
+
+    function closeTourParts() {
+      [tour.spot, tour.card, tour.blocker].forEach(n => n && n.remove());
+      tour.spot = tour.card = tour.blocker = null;
+      window.removeEventListener('resize', placeTour);
+      window.removeEventListener('scroll', placeTour, true);
+      document.removeEventListener('keydown', tourKeys);
+    }
+
+    function endTour() {
+      closeTourParts();
+      // Remember on the server, so it doesn't run again on any device.
+      fetch('/api/tour/seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: '{}'
+      }).catch(() => {});
+    }
+
+    // First visit: start once nothing else (a popup or check-in) is open.
+    if (SHOW_TOUR) {
+      let waited = 0;
+      const tryStart = () => {
+        const busy = [...document.querySelectorAll('.modal-overlay')]
+          .some(m => getComputedStyle(m).display !== 'none');
+        if (!busy || waited > 30000) startTour();
+        else { waited += 1000; setTimeout(tryStart, 1000); }
+      };
+      setTimeout(tryStart, 900);
+    }
 
     function printModalTable() {
       const area = document.getElementById('modalPrintArea').innerHTML;
