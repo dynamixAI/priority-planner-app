@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="icon" type="image/png" sizes="32x32"
+        href="{{ url_for('static', filename='favicon-32.png') }}">
+  <title>Meetings | Agenndar</title>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url("{{ url_for('static', filename='fonts/Onest-Variable.woff2') }}")
+          format('woff2');
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    :root {
+      --bg: #eef2f2; --card-bg: #ffffff; --text: #13201f; --border: #d9e1e1;
+      --subtext: #5b6b6b; --input-bg: #f6f8f8; --primary: #0b8a97;
+      --on-primary: #ffffff; --meet: #7c5cd6; --held: #1f9d55;
+      --missed: #e5484d; --noshow: #d97706; color-scheme: light;
+    }
+    [data-theme="dark"] {
+      --bg: #0d1617; --card-bg: #142123; --text: #e6efef; --border: #23373a;
+      --subtext: #8fa3a3; --input-bg: #111c1e; --primary: #33d1de;
+      --on-primary: #062226; --meet: #a48cf0; --held: #4ade80;
+      --missed: #ff7a7f; --noshow: #fbbf24; color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Onest', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+      font-variant-numeric: tabular-nums;
+      background: var(--bg); color: var(--text); margin: 0; min-height: 100vh;
+      padding: calc(1.25rem + env(safe-area-inset-top)) 1rem
+        calc(2rem + env(safe-area-inset-bottom));
+    }
+    button { font-family: inherit; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .page { width: 100%; max-width: 680px; margin: 0 auto; }
+    .top { display: flex; justify-content: space-between; align-items: center;
+           gap: 1rem; }
+    .top a { color: var(--primary); text-decoration: none; font-size: 0.88rem;
+             font-weight: 600; }
+    h1 { margin: 0.7rem 0 0.3rem; font-size: 1.7rem; font-weight: 650;
+         letter-spacing: -0.02em; }
+    .intro { font-size: 0.88rem; color: var(--subtext); line-height: 1.5;
+             margin: 0 0 1.2rem; max-width: 60ch; }
+
+    .record {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 16px; padding: 1rem 1.1rem; margin-bottom: 1.4rem;
+    }
+    .record-bar { display: flex; height: 10px; border-radius: 99px;
+                  overflow: hidden; background: var(--input-bg); gap: 2px; }
+    .record-bar span { display: block; }
+    .record-keys { display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem;
+                   margin-top: 0.75rem; font-size: 0.86rem; }
+    .record-keys b { font-size: 1.15rem; margin-right: 0.3rem; }
+    .key::before { content: ""; display: inline-block; width: 9px; height: 9px;
+                   border-radius: 3px; margin-right: 0.45rem;
+                   background: var(--c); vertical-align: 0.05em; }
+
+    h2 { font-size: 1rem; font-weight: 650; margin: 1.6rem 0 0.2rem; }
+    .hint { font-size: 0.82rem; color: var(--subtext); margin: 0 0 0.7rem; }
+    .list { display: flex; flex-direction: column; gap: 0.6rem; }
+    .meeting {
+      display: grid; grid-template-columns: 2.4rem 1fr; gap: 0.8rem;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-left: 3px solid var(--meet); border-radius: 14px;
+      padding: 0.85rem 1rem;
+    }
+    .icon {
+      width: 2.4rem; height: 2.4rem; border-radius: 50%; display: grid;
+      place-items: center; font-size: 1.1rem;
+      background: color-mix(in srgb, var(--meet) 14%, var(--card-bg));
+    }
+    .title { font-weight: 650; font-size: 0.95rem; line-height: 1.3; }
+    .when { font-size: 0.85rem; margin-top: 0.15rem; }
+    .meta { font-size: 0.8rem; color: var(--subtext); margin-top: 0.35rem;
+            white-space: pre-line; line-height: 1.45; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+    .actions button {
+      padding: 0.5rem 0.8rem; border-radius: 10px; font-size: 0.84rem;
+      font-weight: 600; cursor: pointer; background: var(--input-bg);
+      color: var(--text); border: 1px solid var(--border);
+    }
+    .actions .held { border-color: var(--held); color: var(--held); }
+    .actions .missed { border-color: var(--missed); color: var(--missed); }
+    .actions .no_show { border-color: var(--noshow); color: var(--noshow); }
+    .actions button:hover { background: color-mix(in srgb, currentColor 10%,
+                                                   var(--card-bg)); }
+    .outcome { display: inline-block; margin-top: 0.5rem; font-size: 0.78rem;
+               font-weight: 650; padding: 0.15rem 0.55rem; border-radius: 99px;
+               color: var(--c);
+               background: color-mix(in srgb, var(--c) 13%, var(--card-bg)); }
+    .undo { background: none; border: none; color: var(--subtext);
+            font-size: 0.8rem; text-decoration: underline; cursor: pointer;
+            margin-left: 0.4rem; padding: 0; }
+    .empty { font-size: 0.88rem; color: var(--subtext); background: var(--card-bg);
+             border: 1px dashed var(--border); border-radius: 14px;
+             padding: 1rem; }
+    .empty a { color: var(--primary); font-weight: 600; }
+    .note { font-size: 0.82rem; color: var(--missed); margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="top">
+      <a href="/dashboard">&larr; Dashboard</a>
+      <a href="/settings/booking">Booking links</a>
+    </div>
+    <h1>Meetings</h1>
+    <p class="intro">Meetings and appointments depend on other people too, so
+      they don't affect your Behaviour Index. This is their own record.</p>
+
+    {% set total = record.held + record.missed + record.no_show %}
+    <section class="record" aria-label="Your meeting record">
+      <div class="record-bar" aria-hidden="true">
+        {% if total %}
+          <span style="flex: {{ record.held }}; background: var(--held)"></span>
+          <span style="flex: {{ record.missed }}; background: var(--missed)"></span>
+          <span style="flex: {{ record.no_show }}; background: var(--noshow)"></span>
+        {% endif %}
+      </div>
+      <div class="record-keys">
+        <span class="key" style="--c: var(--held)"><b>{{ record.held }}</b>held</span>
+        <span class="key" style="--c: var(--missed)"><b>{{ record.missed }}</b>missed
+          by you</span>
+        <span class="key" style="--c: var(--noshow)"><b>{{ record.no_show }}</b>they
+          didn't show</span>
+      </div>
+    </section>
+
+    {% macro card(t, mode) %}
+      <article class="meeting" data-id="{{ t.id }}">
+        <div class="icon" aria-hidden="true">{{ {'in_person': '👥', 'phone': '📞',
+          'online': '💻'}.get(t.meeting_type, '👥') }}</div>
+        <div>
+          <div class="title">{{ t.title }}</div>
+          <div class="when">{{ when(t) }}</div>
+          {% if t.location or t.detail %}
+            <div class="meta">{% if t.location %}{{ t.location }}
+{% endif %}{{ t.detail or '' }}</div>
+          {% endif %}
+          {% if mode == 'waiting' %}
+            <div class="actions">
+              {% for key, label in [('held', 'Happened'), ('missed', 'I missed it'),
+                                    ('no_show', "They didn't show")] %}
+                <button type="button" class="{{ key }}"
+                  onclick="setOutcome({{ t.id }}, '{{ key }}', this)">
+                  {{ label }}</button>
+              {% endfor %}
+            </div>
+          {% elif mode == 'earlier' %}
+            {% set colour = {'held': 'var(--held)', 'missed': 'var(--missed)',
+                             'no_show': 'var(--noshow)'}[t.meeting_outcome] %}
+            <span class="outcome" style="--c: {{ colour }}">
+              {{ outcomes[t.meeting_outcome][0] }}</span>
+            <button type="button" class="undo"
+                    onclick="setOutcome({{ t.id }}, null, this)">Undo</button>
+          {% endif %}
+        </div>
+      </article>
+    {% endmacro %}
+
+    {% if waiting %}
+      <h2>How did these go?</h2>
+      <p class="hint">Tap one answer for each. You can undo it later.</p>
+      <div class="list">
+        {% for t in waiting %}{{ card(t, 'waiting') }}{% endfor %}
+      </div>
+    {% endif %}
+
+    <h2>Coming up</h2>
+    {% if upcoming %}
+      <div class="list">
+        {% for t in upcoming %}{{ card(t, 'upcoming') }}{% endfor %}
+      </div>
+    {% else %}
+      <p class="empty">No meetings coming up.
+        {% if has_link %}Share your booking link and new bookings appear here.
+        {% else %}<a href="/settings/booking">Set up a booking link</a> so people
+        can book time with you, or add a meeting from the dashboard.{% endif %}</p>
+    {% endif %}
+
+    {% if earlier %}
+      <h2>Earlier</h2>
+      <div class="list">
+        {% for t in earlier %}{{ card(t, 'earlier') }}{% endfor %}
+      </div>
+    {% endif %}
+  </main>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    async function setOutcome(taskId, outcome, btn) {
+      const card = btn.closest('.meeting');
+      card.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      const res = await fetch('/api/meeting/outcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ task_id: taskId, outcome: outcome })
+      });
+      if (res.ok) {
+        window.location.reload();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      card.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      let note = card.querySelector('.note');
+      if (!note) {
+        note = document.createElement('div');
+        note.className = 'note';
+        card.lastElementChild.appendChild(note);
+      }
+      note.textContent = data.error || 'That didn’t save. Please try again.';
+    }
+  </script>
+</body>
+</html>

@@ -52,10 +52,10 @@ _current["conn"] = FakeTurso(":memory:")
 turso_http.TursoHTTPConnection = lambda *a, **k: _current["conn"]
 
 import app as app_module  # noqa: E402
-import alerts, core, pages, reminders, tasks  # noqa: E401,E402
+import alerts, booking, core, pages, reminders, tasks  # noqa: E401,E402
 
 # Freeze the clock everywhere the app asks "what time is it for this user?"
-for part in (core, pages, reminders, tasks):
+for part in (booking, core, pages, reminders, tasks):
     part.user_now = lambda tz_name: FROZEN_NOW
 app_module.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
 

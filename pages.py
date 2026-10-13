@@ -68,7 +68,8 @@ def dashboard():
     # user's own date, so the flip happens at THEIR midnight.
     today_str = today.strftime("%Y-%m-%d")
     conn.execute(
-        "UPDATE tasks SET status = 'missed' WHERE user_id = ? AND status = 'pending' AND date < ?",
+        "UPDATE tasks SET status = 'missed' WHERE user_id = ? AND status = 'pending' "
+        "AND date < ? AND meeting_type IS NULL",
         (user_id, today_str)
     )
     conn.commit()
@@ -119,6 +120,11 @@ def dashboard():
     overdue_threshold_days = user["overdue_threshold_days"] if user and user["overdue_threshold_days"] else 14
     metrics = compute_metrics(conn, user_id, now_dt, overdue_threshold_days)
     attention_tasks = fetch_attention_tasks(conn, user_id, today_str)
+    # Started meetings with no outcome yet
+    meetings_waiting = (fetch_one(conn, (
+        "SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'pending' "
+        "AND meeting_type IS NOT NULL AND (date < ? OR (date = ? AND time <= ?))"),
+        (user_id, today_str, today_str, now_dt.strftime("%H:%M"))) or {}).get("n") or 0
 
     week_dates_iso = [d.strftime("%Y-%m-%d") for d in visible_week_dates]
 
@@ -129,6 +135,7 @@ def dashboard():
         priorities=priorities,
         tasks=tasks,
         attention_tasks=attention_tasks,
+        meetings_waiting=meetings_waiting,
         week_dates=visible_week_dates,
         week_dates_iso=week_dates_iso,
         week_start_pref=week_start_pref,
@@ -178,7 +185,8 @@ def trends():
     # Only the chart's own date range is loaded, not every task ever made.
     range_tasks = fetch_all(
         conn,
-        "SELECT date, status FROM tasks WHERE user_id = ? AND date BETWEEN ? AND ?",
+        "SELECT date, status FROM tasks WHERE user_id = ? AND date BETWEEN ? AND ? "
+        "AND meeting_type IS NULL",
         (user_id, first_day, today.strftime("%Y-%m-%d"))
     )
 

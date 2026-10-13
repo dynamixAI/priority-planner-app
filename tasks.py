@@ -123,8 +123,11 @@ def api_tasks_list():
     params = [session["user_id"], status]
     date = clean_date(request.args.get("date"))
     if date:
+        # Overlap check, so meetings count here
         sql += " AND date = ?"
         params.append(date)
+    else:
+        sql += " AND meeting_type IS NULL"
     sql += " ORDER BY date ASC, time ASC"
     return jsonify({"tasks": fetch_all(get_db(), sql, params)})
 
@@ -153,6 +156,10 @@ def add_task():
         duration_minutes = 60
     duration_minutes = max(5, min(1440, duration_minutes))
 
+    meeting_type = data.get("meeting_type") or None
+    if meeting_type not in (None, "in_person", "phone", "online"):
+        return jsonify({"error": "Please choose how the meeting happens."}), 400
+
     conn = get_db()
     priority_id = data.get("priority_id")
     if priority_id is not None and not fetch_one(
@@ -162,11 +169,11 @@ def add_task():
         return jsonify({"error": "Please choose a valid priority."}), 400
 
     conn.execute(
-        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)",
+        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id, created_at, meeting_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?)",
         (session["user_id"], title, clean_text(data.get("detail"), MAX_TEXT_LEN),
          clean_text(data.get("location"), MAX_TITLE_LEN), date, time_val,
          clean_text(data.get("duration"), 40), duration_minutes, priority_id,
-         time.time())
+         time.time(), meeting_type)
     )
     conn.commit()
     return jsonify({"status": "success"})
@@ -185,6 +192,8 @@ def update_status():
     if not task:
         return jsonify({"error": "Not found"}), 404
 
+    if task.get("meeting_type"):
+        return jsonify({"error": "For meetings, choose Happened, I missed it or They didn't show."}), 400
     if task["status"] in ("rescheduled", "replanned") and target_status == "completed":
         return jsonify({"error": "This task was moved to a new time — complete it there instead."}), 400
     if (task["status"], target_status) not in ALLOWED_STATUS_CHANGES:
@@ -261,11 +270,16 @@ def reschedule_task():
         result_label = "pushed" if is_overdue else "replanned"
         conn.execute("UPDATE tasks SET status = ? WHERE id = ? AND user_id = ?", (original_new_status, task_id, session["user_id"]))
 
+    # The guest's cancel link moves to the new copy
     conn.execute(
-        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id, meeting_type, booked_by, booked_via, booking_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
         (session["user_id"], task["title"], task["detail"], task["location"],
-         new_date, new_time, task["duration"], task["duration_minutes"] or 60, task["priority_id"], origin)
+         new_date, new_time, task["duration"], task["duration_minutes"] or 60, task["priority_id"], origin,
+         task.get("meeting_type"), task.get("booked_by"), task.get("booked_via"),
+         task.get("booking_ref"))
     )
+    if task.get("booking_ref"):
+        conn.execute("UPDATE tasks SET booking_ref = NULL WHERE id = ?", (task["id"],))
     conn.commit()
     return jsonify({"status": "success", "result": result_label})
 

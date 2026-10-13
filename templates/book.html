@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" sizes="32x32"
+        href="{{ url_for('static', filename='favicon-32.png') }}">
+  <title>Book with {{ owner }} | Agenndar</title>
+  {% include "_book_style.html" %}
+  <style>
+    .book { max-width: 560px; }
+    .who { display: flex; gap: 0.9rem; align-items: center; }
+    .avatar {
+      flex: none; width: 3.2rem; height: 3.2rem; border-radius: 50%;
+      display: grid; place-items: center; font-size: 1.35rem; font-weight: 700;
+      background: var(--soft); color: var(--primary);
+    }
+    .who h1 { margin: 0.1rem 0 0.15rem; }
+    .who p { margin: 0; font-size: 0.84rem; }
+
+    .lengths {
+      display: flex; gap: 4px; padding: 4px; margin: 1.3rem 0 1rem;
+      border-radius: 13px; background: var(--input-bg);
+      border: 1px solid var(--border); overflow-x: auto;
+    }
+    .lengths label {
+      position: relative; flex: 1 0 auto; text-align: center; cursor: pointer;
+      padding: 0.55rem 0.7rem; border-radius: 9px; font-size: 0.86rem;
+      font-weight: 600; color: var(--subtext); white-space: nowrap;
+    }
+    .lengths input, .kinds input {
+      position: absolute; opacity: 0; width: 1px; height: 1px;
+    }
+    .lengths label:has(input:checked) {
+      background: var(--card-bg); color: var(--text);
+      box-shadow: 0 1px 4px rgba(8, 18, 20, 0.12);
+    }
+    .lengths label:has(input:focus-visible),
+    .kinds label:has(input:focus-visible) { outline: 2px solid var(--primary); }
+
+    .cal-head { display: flex; align-items: center; justify-content: space-between;
+                margin-bottom: 0.6rem; }
+    .cal-head strong { font-size: 1.02rem; font-weight: 650; }
+    .cal-nav {
+      width: 2.3rem; height: 2.3rem; border-radius: 50%; cursor: pointer;
+      border: 1px solid var(--border); background: var(--card-bg);
+      color: var(--text); font-size: 1.1rem; line-height: 1;
+    }
+    .cal-nav:disabled { opacity: 0.3; cursor: default; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .dow { text-align: center; font-size: 0.72rem; font-weight: 600;
+           color: var(--subtext); padding: 0.3rem 0; }
+    .day {
+      position: relative; aspect-ratio: 1; border: none; border-radius: 50%;
+      background: transparent; color: var(--subtext); font-size: 0.92rem;
+      font-weight: 500; cursor: default; opacity: 0.45;
+    }
+    .day.free {
+      cursor: pointer; opacity: 1; color: var(--primary); font-weight: 700;
+      background: var(--soft);
+    }
+    .day.free:hover { box-shadow: inset 0 0 0 2px var(--primary); }
+    .day.today::after {
+      content: ""; position: absolute; left: 50%; bottom: 14%; width: 4px;
+      height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor;
+    }
+    .day.on { background: var(--primary); color: var(--on-primary); }
+    .cal-empty { margin-top: 0.8rem; }
+
+    .sheet h2 { margin: 0; font-size: 1.1rem; font-weight: 650; }
+    .sheet-sub { margin: 0.2rem 0 1rem; font-size: 0.84rem; }
+    .group { font-size: 0.78rem; font-weight: 650; color: var(--subtext);
+             margin: 0.9rem 0 0.45rem; }
+    .group:first-child { margin-top: 0; }
+    .times { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+    .slot {
+      padding: 0.65rem 0.3rem; border-radius: 12px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--card-bg);
+      color: var(--text); text-align: center;
+    }
+    .slot b { display: block; font-size: 0.98rem; font-weight: 650; }
+    .slot span { display: block; font-size: 0.72rem; color: var(--subtext);
+                 margin-top: 0.1rem; }
+    .slot:hover { border-color: var(--primary); }
+    .slot.on { background: var(--primary); border-color: var(--primary);
+               color: var(--on-primary); }
+    .slot.on span { color: inherit; opacity: 0.85; }
+    .sheet-close {
+      width: 2.2rem; height: 2.2rem; border-radius: 50%; border: none;
+      background: var(--input-bg); color: var(--text); font-size: 1rem;
+      cursor: pointer;
+    }
+    .sheet-top { display: flex; justify-content: space-between; gap: 1rem;
+                 align-items: flex-start; }
+    .handle { width: 2.6rem; height: 4px; border-radius: 4px; margin: -0.3rem auto
+              0.9rem; background: var(--border); }
+    .other { margin-top: 1.2rem; border-top: 1px solid var(--border);
+             padding-top: 0.9rem; }
+    .other summary { cursor: pointer; font-size: 0.86rem; font-weight: 600;
+                     color: var(--primary); }
+    .other .row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem;
+                  margin-top: 0.7rem; align-items: end; }
+    .other button { padding: 0.62rem 0.8rem; border-radius: 10px; border: none;
+                    background: var(--primary); color: var(--on-primary);
+                    font-weight: 650; cursor: pointer; }
+    .shade { position: fixed; inset: 0; background: var(--shade); opacity: 0;
+             pointer-events: none; transition: opacity 0.2s; z-index: 10; }
+    .shade.show { opacity: 1; pointer-events: auto; }
+
+    @media (max-width: 759px) {
+      .sheet {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
+        max-height: 80vh; overflow-y: auto; background: var(--card-bg);
+        border-radius: 22px 22px 0 0; padding: 1rem 1.1rem
+        calc(1.4rem + env(safe-area-inset-bottom));
+        transform: translateY(105%); visibility: hidden;
+        transition: transform 0.26s ease, visibility 0s linear 0.26s;
+        box-shadow: 0 -10px 40px rgba(8, 18, 20, 0.2);
+      }
+      .sheet.open { transform: none; visibility: visible;
+                    transition: transform 0.26s ease; }
+      .sheet-idle { display: none; }
+    }
+    @media (min-width: 760px) {
+      .book { max-width: 900px; padding: 1.8rem 2rem 2rem; }
+      .layout { display: grid; grid-template-columns: 1.1fr 1fr; gap: 2rem;
+                align-items: start; }
+      .sheet { border-left: 1px solid var(--border); padding-left: 2rem;
+               min-height: 100%; }
+      .handle, .sheet-close { display: none; }
+      .details { max-width: 560px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sheet, .shade { transition: none; }
+    }
+
+    .details { margin-top: 1.6rem; border-top: 1px solid var(--border);
+               padding-top: 1.2rem; }
+    .chosen {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.8rem; padding: 0.8rem 0.9rem; border-radius: 14px;
+      background: var(--soft); margin-bottom: 1rem;
+    }
+    .chosen strong { font-size: 0.95rem; font-weight: 650; }
+    .chosen button { border: none; background: none; color: var(--primary);
+                     font-weight: 650; font-size: 0.86rem; cursor: pointer; }
+    .kinds { display: grid; grid-template-columns: repeat(auto-fit,
+             minmax(7.5rem, 1fr)); gap: 0.5rem; }
+    .kinds label {
+      position: relative; display: flex; flex-direction: column; gap: 0.25rem;
+      align-items: center; padding: 0.75rem 0.4rem; border-radius: 14px;
+      border: 1px solid var(--border); background: var(--input-bg);
+      font-size: 0.84rem; font-weight: 600; cursor: pointer; text-align: center;
+    }
+    .kinds label .ico { font-size: 1.35rem; }
+    .kinds label:has(input:checked) { border-color: var(--primary);
+      background: var(--soft); box-shadow: inset 0 0 0 1px var(--primary); }
+    .field { display: block; margin-top: 0.9rem; }
+    .field > span { display: block; font-size: 0.82rem; font-weight: 600;
+                    margin-bottom: 0.35rem; }
+    .field input, .field textarea {
+      width: 100%; padding: 0.7rem 0.8rem; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--input-bg);
+      color: var(--text); font-size: 0.95rem;
+    }
+    .field input:focus, .field textarea:focus { outline: none;
+                                                border-color: var(--primary); }
+    .label { font-size: 0.82rem; font-weight: 600; margin: 0 0 0.45rem; }
+    .trap { position: absolute; left: -9999px; width: 1px; height: 1px;
+            overflow: hidden; }
+  </style>
+</head>
+<body>
+  <main class="card book">
+    <header class="who">
+      <div class="avatar" aria-hidden="true">{{ owner[:1]|upper }}</div>
+      <div>
+        <div class="brand">Agenndar</div>
+        <h1>{{ 'Add to ' ~ owner ~ "'s planner" if trusted
+               else 'Book with ' ~ owner }}</h1>
+        <p>{% if trusted %}Assistant link. Pick a free time, or any time
+           that doesn't clash.{% else %}Pick a day, then a time that suits
+           you.{% endif %} Times are in {{ timezone }} time.</p>
+      </div>
+    </header>
+
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+    <form method="POST" id="bookForm" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="date" id="dateInput"
+             value="{{ form.get('date', '') }}">
+      <input type="hidden" name="time" id="timeInput"
+             value="{{ form.get('time', '') }}">
+      <div class="trap" aria-hidden="true">
+        <label>Website <input type="text" name="website" tabindex="-1"
+               autocomplete="off"></label>
+      </div>
+
+      <div class="lengths" id="lengths" role="radiogroup" aria-label="How long">
+        {% for n in lengths %}
+          <label><input type="radio" name="length" value="{{ n }}"
+            {{ 'checked' if form.get('length', '') == n|string
+               or (not form.get('length') and loop.first) }}>
+            {{ n if n < 60 else (n // 60 ~ ('.5' if n % 60 else '')) }}
+            {{ 'min' if n < 60 else ('hour' if n == 60 else 'hours') }}</label>
+        {% endfor %}
+      </div>
+
+      <div class="layout">
+        <section aria-label="Choose a day">
+          <div class="cal-head">
+            <button type="button" class="cal-nav" id="prevMonth"
+                    aria-label="Previous month">&#8249;</button>
+            <strong id="monthLabel"></strong>
+            <button type="button" class="cal-nav" id="nextMonth"
+                    aria-label="Next month">&#8250;</button>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+          <p class="cal-empty" id="calEmpty" hidden>No free times in the next
+            few weeks for this length. Try a shorter meeting.</p>
+        </section>
+
+        <section class="sheet" id="sheet" aria-label="Choose a time">
+          <div class="handle" aria-hidden="true"></div>
+          <div class="sheet-top">
+            <div>
+              <h2 id="sheetDay">Pick a day</h2>
+              <p class="sheet-sub" id="sheetSub">Free times show here.</p>
+            </div>
+            <button type="button" class="sheet-close" id="sheetClose"
+                    aria-label="Close">&#10005;</button>
+          </div>
+          <div id="sheetTimes"></div>
+          {% if trusted %}
+          <details class="other">
+            <summary>Pick a time that's not listed</summary>
+            <div class="row">
+              <label class="field"><span>Date</span>
+                <input type="date" id="otherDate" min="{{ today }}"></label>
+              <label class="field"><span>Start</span>
+                <input type="time" id="otherTime" step="300"></label>
+              <button type="button" id="useOther">Use</button>
+            </div>
+          </details>
+          {% endif %}
+        </section>
+      </div>
+      <div class="shade" id="shade"></div>
+
+      <section class="details" id="details" hidden>
+        <div class="chosen">
+          <strong id="chosenText"></strong>
+          <button type="button" id="changeTime">Change</button>
+        </div>
+
+        <p class="label">How will you meet?</p>
+        <div class="kinds" id="kinds">
+          {% set icons = {'in_person': '👥', 'phone': '📞', 'online': '💻',
+                          'task': '✅'} %}
+          {% for key, label in types.items() %}
+            <label><input type="radio" name="kind" value="{{ key }}"
+              {{ 'checked' if form.get('kind', '') == key
+                 or (not form.get('kind') and loop.first) }}>
+              <span class="ico" aria-hidden="true">{{ icons[key] }}</span>
+              {{ label }}</label>
+          {% endfor %}
+        </div>
+
+        <label class="field" id="nameField">
+          <span>{{ 'Who is it with?' if trusted else 'Your name' }}</span>
+          <input type="text" name="name" maxlength="100" autocomplete="name"
+                 value="{{ form.get('name', '') }}"></label>
+        <label class="field" id="emailField">
+          <span>Email{{ ' (optional)' if trusted }}</span>
+          <input type="email" name="email" maxlength="200" autocomplete="email"
+                 value="{{ form.get('email', '') }}"></label>
+        <label class="field" id="phoneField">
+          <span id="phoneLabel">Phone number</span>
+          <input type="tel" name="phone" maxlength="40" autocomplete="tel"
+                 value="{{ form.get('phone', '') }}"></label>
+        <label class="field" id="placeField">
+          <span id="placeLabel">Address</span>
+          <input type="text" name="place" maxlength="200"
+                 value="{{ form.get('place', '') }}"></label>
+        <label class="field">
+          <span id="topicLabel">What's it about?</span>
+          <input type="text" name="topic" maxlength="120"
+                 value="{{ form.get('topic', '') }}"></label>
+        <label class="field"><span>Anything else? (optional)</span>
+          <textarea name="notes" rows="3"
+                    maxlength="2000">{{ form.get('notes', '') }}</textarea></label>
+
+        <button type="submit" class="submit" id="submitBtn">
+          {{ 'Add to planner' if trusted else 'Book it' }}</button>
+      </section>
+    </form>
+  </main>
+
+  <script>
+    const SLOTS = {{ slots|tojson }};
+    const TWELVE_HOUR = {{ (time_format == '12h')|tojson }};
+    const TODAY = {{ today|tojson }};
+    const $ = id => document.getElementById(id);
+    const dateInput = $('dateInput');
+    const timeInput = $('timeInput');
+    const sheet = $('sheet');
+    const shade = $('shade');
+    const phone = window.matchMedia('(max-width: 759px)');
+    let shownMonth = null;
+
+    const pad = n => String(n).padStart(2, '0');
+    const isoOf = d =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const dateOf = iso => new Date(iso + 'T12:00:00');
+    function fmtTime(t) {
+      if (!TWELVE_HOUR) return t;
+      let [h, m] = t.split(':').map(Number);
+      const ampm = h < 12 ? 'am' : 'pm';
+      h = h % 12 || 12;
+      return `${h}:${pad(m)}${ampm}`;
+    }
+    function addMinutes(t, mins) {
+      const [h, m] = t.split(':').map(Number);
+      const total = Math.min(h * 60 + m + mins, 1439);
+      return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+    }
+    function longDay(iso) {
+      return dateOf(iso).toLocaleDateString('en-GB',
+        { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+    const length = () =>
+      (document.querySelector('input[name="length"]:checked') || {}).value || '';
+    const freeDays = () => SLOTS[length()] || {};
+
+    function drawCalendar() {
+      const days = freeDays();
+      const dates = Object.keys(days).sort();
+      $('calEmpty').hidden = dates.length > 0;
+      const first = dateOf(TODAY);
+      const firstMonth = new Date(first.getFullYear(), first.getMonth(), 1);
+      const lastIso = dates.length ? dates[dates.length - 1] : TODAY;
+      const last = dateOf(lastIso);
+      const lastMonth = new Date(last.getFullYear(), last.getMonth(), 1);
+      if (!shownMonth || shownMonth < firstMonth || shownMonth > lastMonth) {
+        const start = dateOf(dateInput.value && days[dateInput.value]
+          ? dateInput.value : (dates[0] || TODAY));
+        shownMonth = new Date(start.getFullYear(), start.getMonth(), 1);
+      }
+      $('prevMonth').disabled = shownMonth <= firstMonth;
+      $('nextMonth').disabled = shownMonth >= lastMonth;
+      $('monthLabel').textContent = shownMonth.toLocaleDateString('en-GB',
+        { month: 'long', year: 'numeric' });
+
+      const grid = $('calGrid');
+      grid.innerHTML = '';
+      ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'dow';
+        el.textContent = d.slice(0, 1);
+        el.title = d;
+        grid.appendChild(el);
+      });
+      const offset = (shownMonth.getDay() + 6) % 7;
+      for (let i = 0; i < offset; i++) {
+        grid.appendChild(document.createElement('div'));
+      }
+      const inMonth = new Date(shownMonth.getFullYear(),
+                               shownMonth.getMonth() + 1, 0).getDate();
+      for (let n = 1; n <= inMonth; n++) {
+        const d = new Date(shownMonth.getFullYear(), shownMonth.getMonth(), n);
+        const iso = isoOf(d);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = n;
+        b.className = 'day' + (days[iso] ? ' free' : '')
+          + (iso === TODAY ? ' today' : '') + (iso === dateInput.value ? ' on' : '');
+        if (days[iso]) {
+          const count = days[iso].length;
+          b.setAttribute('aria-label',
+            `${longDay(iso)}, ${count} free time${count === 1 ? '' : 's'}`);
+          b.onclick = () => pickDay(iso);
+        } else {
+          b.disabled = true;
+          b.setAttribute('aria-label', `${longDay(iso)}, not available`);
+        }
+        grid.appendChild(b);
+      }
+    }
+
+    function drawTimes() {
+      const iso = dateInput.value;
+      const times = iso ? (freeDays()[iso] || []) : [];
+      const box = $('sheetTimes');
+      box.innerHTML = '';
+      if (!iso) {
+        $('sheetDay').textContent = 'Pick a day';
+        $('sheetSub').textContent = 'Free times show here.';
+        return;
+      }
+      $('sheetDay').textContent = longDay(iso);
+      $('sheetSub').textContent = times.length
+        ? `${length()} minutes. Tap a time.`
+        : 'No free times left on this day.';
+      const groups = [['Morning', t => t < '12:00'],
+                      ['Afternoon', t => t >= '12:00' && t < '17:00'],
+                      ['Evening', t => t >= '17:00']];
+      groups.forEach(([name, test]) => {
+        const list = times.filter(test);
+        if (!list.length) return;
+        const h = document.createElement('div');
+        h.className = 'group';
+        h.textContent = name;
+        box.appendChild(h);
+        const wrap = document.createElement('div');
+        wrap.className = 'times';
+        list.forEach(t => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'slot' + (t === timeInput.value ? ' on' : '');
+          b.innerHTML = `<b>${fmtTime(t)}</b><span>to ${
+            fmtTime(addMinutes(t, Number(length())))}</span>`;
+          b.onclick = () => pickTime(t);
+          wrap.appendChild(b);
+        });
+        box.appendChild(wrap);
+      });
+    }
+
+    function openSheet() {
+      if (!phone.matches) return;
+      sheet.classList.add('open');
+      shade.classList.add('show');
+    }
+    function closeSheet() {
+      sheet.classList.remove('open');
+      shade.classList.remove('show');
+    }
+
+    function pickDay(iso) {
+      dateInput.value = iso;
+      timeInput.value = '';
+      drawCalendar();
+      drawTimes();
+      showDetails();
+      openSheet();
+    }
+
+    function pickTime(t) {
+      timeInput.value = t;
+      drawTimes();
+      closeSheet();
+      showDetails();
+      $('details').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function showDetails() {
+      const ready = dateInput.value && timeInput.value;
+      $('details').hidden = !ready;
+      if (ready) {
+        $('chosenText').textContent = `${longDay(dateInput.value)}, ${
+          fmtTime(timeInput.value)} to ${
+          fmtTime(addMinutes(timeInput.value, Number(length())))}`;
+      }
+    }
+
+    function showKindFields() {
+      const kind = (document.querySelector('input[name="kind"]:checked') || {}).value;
+      $('phoneLabel').textContent = kind === 'phone'
+        ? 'Phone number to call' : 'Phone number (optional)';
+      $('placeField').hidden = kind === 'phone' || kind === 'task';
+      $('placeLabel').textContent = kind === 'online'
+        ? 'Meeting link (optional)' : 'Address (optional)';
+      $('nameField').hidden = kind === 'task';
+      $('topicLabel').textContent = kind === 'task'
+        ? 'What is the task?' : "What's it about?";
+    }
+
+    $('prevMonth').onclick = () => {
+      shownMonth = new Date(shownMonth.getFullYear(), shownMonth.getMonth() - 1, 1);
+      drawCalendar();
+    };
+    $('nextMonth').onclick = () => {
+      shownMonth = new Date(shownMonth.getFullYear(), shownMonth.getMonth() + 1, 1);
+      drawCalendar();
+    };
+    $('lengths').addEventListener('change', () => {
+      timeInput.value = '';
+      if (dateInput.value && !freeDays()[dateInput.value]) dateInput.value = '';
+      drawCalendar();
+      drawTimes();
+      showDetails();
+    });
+    $('kinds').addEventListener('change', showKindFields);
+    $('sheetClose').onclick = closeSheet;
+    shade.onclick = closeSheet;
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeSheet();
+    });
+    $('changeTime').onclick = () => {
+      if (phone.matches && dateInput.value) {
+        openSheet();
+      } else {
+        $('calGrid').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+    if ($('useOther')) {
+      $('useOther').onclick = () => {
+        const d = $('otherDate').value;
+        const t = $('otherTime').value;
+        if (!d || !t) return;
+        dateInput.value = d;
+        timeInput.value = t;
+        drawCalendar();
+        drawTimes();
+        closeSheet();
+        showDetails();
+        $('details').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+    }
+    $('bookForm').addEventListener('submit', () => {
+      $('submitBtn').disabled = true;
+    });
+
+    drawCalendar();
+    drawTimes();
+    showDetails();
+    showKindFields();
+  </script>
+</body>
+</html>

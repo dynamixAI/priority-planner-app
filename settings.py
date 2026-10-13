@@ -159,6 +159,8 @@ def delete_account():
     conn.execute("DELETE FROM tasks WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM priorities WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM push_subscriptions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM availability WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM booking_links WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
 

@@ -29,7 +29,7 @@ def compute_metrics(conn, user_id, now_dt, overdue_threshold_days):
           SUM(CASE WHEN status = 'pending'
                     AND (date > ? OR (date = ? AND time > ?))
                    THEN 1 ELSE 0 END) AS not_yet_due
-        FROM tasks WHERE user_id = ?
+        FROM tasks WHERE user_id = ? AND meeting_type IS NULL
     """, (today_str, today_str, now_hhmm, user_id)) or {}
     n = {k: (v or 0) for k, v in row.items()}
 
@@ -41,6 +41,7 @@ def compute_metrics(conn, user_id, now_dt, overdue_threshold_days):
         SELECT COUNT(*) AS n FROM tasks t
         LEFT JOIN tasks o ON o.id = t.origin_id AND o.user_id = t.user_id
         WHERE t.user_id = ? AND t.status = 'pending'
+          AND t.meeting_type IS NULL
           AND COALESCE(o.date, t.date) <= ?
     """, (user_id, cutoff))
     overdue_flagged = (overdue or {}).get("n") or 0
@@ -86,11 +87,13 @@ def fetch_attention_tasks(conn, user_id, today_str):
     open_tasks = fetch_all(conn, """
         SELECT * FROM tasks
         WHERE user_id = ? AND status = 'pending' AND date <= ?
+          AND meeting_type IS NULL
         ORDER BY date ASC, time ASC
     """, (user_id, today_str))
     missed = fetch_all(conn, """
         SELECT t.* FROM tasks t
         WHERE t.user_id = ? AND t.status = 'missed'
+          AND t.meeting_type IS NULL
           AND COALESCE(t.followup_dismissed, 0) = 0
           AND NOT EXISTS (
             SELECT 1 FROM tasks x

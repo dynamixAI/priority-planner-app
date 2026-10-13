@@ -1070,6 +1070,37 @@
       border-color: var(--metric-muted);
       border-left-color: var(--p);
     }
+    /* Meetings */
+    .task-card.meeting {
+      background: color-mix(in srgb, var(--p) 9%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--p) 55%, transparent);
+      border-left: 3px solid var(--p);
+    }
+    .task-card.meeting.missed {
+      border-color: #e5484d; border-left-color: #e5484d;
+    }
+    .meetings-btn { position: relative; text-decoration: none; color: inherit; }
+    .nav-badge {
+      position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px;
+      padding: 0 5px; border-radius: 99px; background: #7c5cd6; color: #fff;
+      font-size: 0.68rem; font-weight: 700; line-height: 18px; text-align: center;
+    }
+    .kind-switch {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;
+      border-radius: 11px; background: var(--table-header);
+      border: 1px solid var(--border);
+    }
+    .form-group .kind-switch label {
+      position: relative; margin: 0; padding: 0.5rem; border-radius: 8px;
+      text-align: center; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+      color: var(--metric-muted);
+    }
+    .kind-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .form-group .kind-switch label:has(input:checked) {
+      background: var(--card-bg); color: var(--text);
+      box-shadow: 0 1px 4px var(--dropdown-shadow);
+    }
+    .kind-switch label:has(input:focus-visible) { outline: 2px solid var(--primary); }
 
     /* Dialogs */
     .modal-overlay { background: rgba(8, 18, 20, 0.55); }
@@ -1629,8 +1660,26 @@
   <!-- Sliding Sidebar Drawer -->
   <aside class="sidebar" id="taskSidebar">
     <div class="sidebar-header">
-      <div class="panel-title">New task</div>
+      <div class="panel-title" id="sidebarTitle">New task</div>
       <button class="btn-close-drawer" onclick="toggleSidebar(false)" title="Close Drawer">✕</button>
+    </div>
+
+    <div class="form-group">
+      <div class="kind-switch" role="radiogroup" aria-label="What are you adding?">
+        <label><input type="radio" name="entryKind" value="task" checked
+          onchange="setEntryKind()"> Task</label>
+        <label><input type="radio" name="entryKind" value="meeting"
+          onchange="setEntryKind()"> Meeting</label>
+      </div>
+    </div>
+
+    <div class="form-group" id="meetingTypeGroup" style="display:none;">
+      <label>How it happens</label>
+      <select id="inputMeetingType">
+        <option value="in_person">👥 In person</option>
+        <option value="phone">📞 Phone call</option>
+        <option value="online">💻 Online</option>
+      </select>
     </div>
 
     <div class="form-group">
@@ -1666,7 +1715,7 @@
       </div>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" id="priorityGroup">
       <label>Priority</label>
       <select id="inputPriority">
         {% for p in priorities %}
@@ -1676,7 +1725,7 @@
     </div>
 
     <div class="form-group">
-      <label>Task</label>
+      <label id="titleLabel">Task</label>
       <input type="text" id="inputTitle" placeholder="e.g. Prepare project proposal">
     </div>
 
@@ -1690,7 +1739,7 @@
       <input type="text" id="inputLocation" placeholder="e.g. Office, Zoom, Coffee Shop">
     </div>
 
-    <button class="btn-create" onclick="submitTask()">Add task</button>
+    <button class="btn-create" id="createBtn" onclick="submitTask()">Add task</button>
   </aside>
 
   <!-- Main Content Area -->
@@ -1720,6 +1769,10 @@
 
       <!-- Right Header Profile & Action Hub -->
       <div class="right-controls">
+        <a href="/meetings" class="nav-btn export-btn meetings-btn" aria-label="Meetings">
+          <span>👥<span class="nav-label"> Meetings</span></span>
+          {% if meetings_waiting %}<span class="nav-badge" title="Meetings waiting for your answer">{{ meetings_waiting }}</span>{% endif %}
+        </a>
         <button class="nav-btn export-btn" onclick="openExportModal()" aria-label="Export or print">
           <span>🖨️<span class="nav-label"> Export</span></span>
         </button>
@@ -1745,6 +1798,9 @@
             <button type="button" class="dropdown-item menu-export" onclick="openExportModal()">
               <span>🖨️ Export or print</span>
             </button>
+            <a href="/meetings" class="dropdown-item">
+              <span>👥 Meetings</span>
+            </a>
             <a href="/settings" class="dropdown-item">
               <span>⚙️ Settings</span>
             </a>
@@ -1821,6 +1877,10 @@
         <span>{{ p.label }}</span>
       </div>
       {% endfor %}
+      <div class="legend-tag">
+        <div class="legend-color" style="background: #7c5cd6;"></div>
+        <span>Meeting (not in your score)</span>
+      </div>
     </div>
 
     <!-- Timetable Grid -->
@@ -2262,9 +2322,17 @@
       return { start, end: Math.min(start + dur, 1440) };
     }
 
+    const MEETING_COLOR = '#7c5cd6';
+    const MEETING_ICONS = { in_person: '👥', phone: '📞', online: '💻' };
+    const MEETING_LABELS = { in_person: 'In-person meeting', phone: 'Phone call',
+                             online: 'Online meeting' };
+    const MEETING_OUTCOMES = { held: 'Happened', missed: 'Missed by you',
+                               no_show: "They didn't show" };
+
     function buildTaskCardHtml(task, overlapLayout) {
       const prio = getPriorityFor(task);
-      const textColor = getContrastTextColor(prio.color);
+      const cardColor = task.meeting_type ? MEETING_COLOR : prio.color;
+      const textColor = getContrastTextColor(cardColor);
       const r = taskRangeMinutes(task);
       const laneInfo = (overlapLayout && overlapLayout.get(task.id)) || { lane: 0, laneCount: 1 };
       const statusClasses = [
@@ -2272,6 +2340,7 @@
         task.status === 'rescheduled' ? 'rescheduled' : '',
         task.status === 'replanned' ? 'replanned' : '',
         task.status === 'missed' ? 'missed' : '',
+        task.meeting_type ? 'meeting' : '',
         textColor === '#0f172a' ? 'dark-text' : ''
       ].join(' ').trim();
 
@@ -2299,10 +2368,10 @@
       }
 
       return `
-        <div class="task-card ${statusClasses}" style="${posStyle} --p: ${prio.color};"
+        <div class="task-card ${statusClasses}" style="${posStyle} --p: ${cardColor};"
           data-id="${task.id}"${canDrag ? ' data-drag title="Drag to reschedule"' : ''}
           onclick="showTaskDetail(${task.id})">
-          <div class="card-title">${escapeHtml(task.title)}${task.status === 'completed' && task.completed_late ? '<span class="late-tag">Late</span>' : ''}</div>
+          <div class="card-title">${task.meeting_type ? (MEETING_ICONS[task.meeting_type] || '') + ' ' : ''}${escapeHtml(task.title)}${task.status === 'completed' && task.completed_late ? '<span class="late-tag">Late</span>' : ''}</div>
           <div class="card-detail">🕒 ${timeLabel}</div>
           ${task.detail ? `<div class="card-detail">${escapeHtml(task.detail)}</div>` : ''}
           ${task.location ? `<div class="card-location">${escapeHtml(task.location)}</div>` : ''}
@@ -3738,7 +3807,9 @@
       const endLabel = minutesToTimeStr(taskRangeMinutes(task).end);
 
       let detailActionsHtml = '';
-      if (task.status === 'rescheduled') {
+      if (task.meeting_type && task.status !== 'rescheduled' && task.status !== 'replanned') {
+        detailActionsHtml = meetingActionsHtml(task);
+      } else if (task.status === 'rescheduled') {
         detailActionsHtml = `
           <div class="detail-row"><span class="locked-label">Rescheduled — already moved to a new time</span></div>
           <button class="btn-create" style="background:#ef4444;" onclick="closeDetailModal(); deleteTask(${task.id})">Delete Task</button>
@@ -3781,6 +3852,7 @@
             ? 'Completed late <span class="late-tag">Late</span>'
             : 'Completed on time'}</div>
         </div>` : ''}
+        ${task.meeting_type ? '' : `
         <div class="detail-row">
           <b>Priority Level</b>
           <div style="display:flex; align-items:center; gap:8px;">
@@ -3792,7 +3864,7 @@
                   style="margin-top:4px; width:100%; padding:0.5rem 0.6rem; border-radius:6px; border:1px solid var(--border); background:var(--table-header); color:var(--text); font-size:0.85rem;">
             ${allPriorities.map(p => `<option value="${p.id}" ${p.id === task.priority_id ? 'selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
           </select>
-        </div>
+        </div>`}
         <div class="detail-row">
           <b>Location</b>
           <div>${task.location ? escapeHtml(task.location) : '<span style="color:var(--metric-muted);">None specified</span>'}</div>
@@ -3809,7 +3881,12 @@
         </div>
         <div class="detail-row">
           <b>Status</b>
-          <div style="text-transform: capitalize;">${task.status}</div>
+          ${task.meeting_type
+            ? `<div>${MEETING_ICONS[task.meeting_type] || ''} ${MEETING_LABELS[task.meeting_type] || 'Meeting'}: ${
+                task.meeting_outcome ? MEETING_OUTCOMES[task.meeting_outcome]
+                : (task.status === 'pending' ? 'not answered yet' : task.status)}.
+                Meetings don't affect your Behaviour Index.</div>`
+            : `<div style="text-transform: capitalize;">${task.status}</div>`}
         </div>
         <div class="detail-row">
           <b>Actions</b>
@@ -3818,6 +3895,44 @@
       `;
 
       document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    function meetingStarted(task) {
+      return new Date(`${task.date}T${task.time}:00`) <= new Date();
+    }
+
+    function meetingActionsHtml(task) {
+      const moveDelete = (withMove) => `
+        <div style="display:flex; gap:0.6rem;">
+          ${withMove ? `<button class="btn-create" style="background:#ea580c; margin-top:0;" onclick="closeDetailModal(); openRescheduleModal(${task.id})">Move</button>` : ''}
+          <button class="btn-create" style="background:#ef4444; margin-top:0;" onclick="closeDetailModal(); deleteTask(${task.id})">Delete</button>
+        </div>`;
+      if (task.meeting_outcome) {
+        return `
+          <div style="display:flex; gap:0.6rem; margin-bottom:0.6rem;">
+            <button class="btn-create" style="margin-top:0; background:var(--metric-muted);" onclick="closeDetailModal(); setMeetingOutcome(${task.id}, null)">Undo "${MEETING_OUTCOMES[task.meeting_outcome]}"</button>
+          </div>` + moveDelete(task.meeting_outcome !== 'held');
+      }
+      const answers = meetingStarted(task) ? `
+        <div style="display:flex; gap:0.5rem; margin-bottom:0.6rem;">
+          <button class="btn-create" style="margin-top:0; background:#1f9d55;" onclick="closeDetailModal(); setMeetingOutcome(${task.id}, 'held')">Happened</button>
+          <button class="btn-create" style="margin-top:0; background:#e5484d;" onclick="closeDetailModal(); setMeetingOutcome(${task.id}, 'missed')">I missed it</button>
+          <button class="btn-create" style="margin-top:0; background:#d97706;" onclick="closeDetailModal(); setMeetingOutcome(${task.id}, 'no_show')">They didn't show</button>
+        </div>` : '';
+      return answers + moveDelete(true);
+    }
+
+    async function setMeetingOutcome(taskId, outcome) {
+      const res = await fetch('/api/meeting/outcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ task_id: taskId, outcome: outcome })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        await appAlert(data.error || "That didn't save. Please try again.");
+      }
+      await refreshMetricsAndTasks();
     }
 
     function closeDetailModal() {
@@ -3880,7 +3995,10 @@
       const titleEl = document.getElementById('rescheduleHeaderTitle');
       const subtitleEl = document.getElementById('rescheduleSubtitle');
 
-      if (task.status === 'missed') {
+      if (task.meeting_type) {
+        titleEl.innerText = "📅 Move meeting";
+        subtitleEl.innerText = `Move "${task.title}" to a new time. Meetings don't affect your Behaviour Index.`;
+      } else if (task.status === 'missed') {
         titleEl.innerText = "🔁 Reschedule Missed Task";
         subtitleEl.innerText = `"${task.title}" stays marked missed — that's permanent — but a new follow-up task will be scheduled.`;
       } else {
@@ -3942,7 +4060,9 @@
       }
 
       if (res && res.ok) {
-        if (result.result === "replanned") {
+        if (currentTask && currentTask.meeting_type) {
+          showToast("Meeting moved.", 3500);
+        } else if (result.result === "replanned") {
           showToast("Moved. It wasn't due yet, so your Behaviour Index isn't affected.", 4500);
         } else if (result.result === "missed_kept") {
           showToast("Follow-up scheduled. The original miss stays on your record.", 4500);
@@ -4118,6 +4238,17 @@
       document.getElementById('customDurationBox').style.display = isCustom ? 'flex' : 'none';
     }
 
+    function setEntryKind() {
+      const meeting = document.querySelector('input[name="entryKind"]:checked').value === 'meeting';
+      document.getElementById('meetingTypeGroup').style.display = meeting ? '' : 'none';
+      document.getElementById('priorityGroup').style.display = meeting ? 'none' : '';
+      document.getElementById('titleLabel').textContent = meeting ? 'Meeting' : 'Task';
+      document.getElementById('inputTitle').placeholder = meeting
+        ? 'e.g. Dentist appointment' : 'e.g. Prepare project proposal';
+      document.getElementById('createBtn').textContent = meeting ? 'Add meeting' : 'Add task';
+      document.getElementById('sidebarTitle').textContent = meeting ? 'New meeting' : 'New task';
+    }
+
     function getDurationValues() {
       const selected = document.getElementById('inputDuration').value;
       if (selected !== 'custom') {
@@ -4137,9 +4268,12 @@
       const title = document.getElementById('inputTitle').value.trim();
       const detail = document.getElementById('inputDetail').value.trim();
       const locationVal = document.getElementById('inputLocation').value.trim();
+      const isMeeting = document.querySelector('input[name="entryKind"]:checked').value === 'meeting';
+      const meeting_type = isMeeting ? document.getElementById('inputMeetingType').value : null;
 
       if (!title || !date) {
-        await appAlert("Please enter a task title and choose a date.");
+        await appAlert(isMeeting ? "Please enter what the meeting is and choose a date."
+                                 : "Please enter a task title and choose a date.");
         return;
       }
 
@@ -4149,7 +4283,7 @@
       await fetch('/api/task/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ date, time, duration, duration_minutes, priority_id, title, detail, location: locationVal })
+        body: JSON.stringify({ date, time, duration, duration_minutes, priority_id, title, detail, location: locationVal, meeting_type })
       });
 
       document.getElementById('inputTitle').value = '';

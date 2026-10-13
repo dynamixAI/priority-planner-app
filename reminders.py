@@ -69,6 +69,37 @@ def push_unsubscribe():
     return jsonify({"status": "success"})
 
 
+def send_push_to_user(conn, user_id, message):
+    """Returns True if at least one device received it."""
+    subs = fetch_all(conn, "SELECT * FROM push_subscriptions WHERE user_id = ?", (user_id,))
+    payload = json.dumps(message)
+    any_delivered = False
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub["endpoint"],
+                    "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
+                },
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY_FILE,
+                vapid_claims=VAPID_CLAIMS.copy(),
+                timeout=10  # never let one slow push service hang the app
+            )
+            any_delivered = True
+        except WebPushException as e:
+            # A 404/410 means the browser revoked this subscription (e.g. the
+            # person cleared site data or uninstalled). Clean it up silently.
+            status = getattr(e.response, "status_code", None)
+            if status in (404, 410):
+                conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (sub["endpoint"],))
+                conn.commit()
+        except Exception:
+            # Timeouts and network errors: log it and try again next run.
+            app.logger.exception("Push notification failed to send")
+    return any_delivered
+
+
 @app.route("/api/cron/send-reminders")
 def send_reminders():
     # Refuse outright if no secret is configured — otherwise an empty
@@ -109,48 +140,13 @@ def send_reminders():
             continue
 
         checked_count += 1
-        subs = fetch_all(conn, "SELECT * FROM push_subscriptions WHERE user_id = ?", (task["user_id"],))
-        if not subs:
-            # No device has notifications turned on yet. Leave the task
-            # unreminded so a later run can still deliver it if the user
-            # turns notifications on before the task starts.
-            continue
-
-        payload = json.dumps({
+        message = {
             "title": "Agenndar",
             "body": f"'{task['title']}' starts at {format_time(task['time'], task.get('user_time_format'))}",
             "url": "/dashboard"
-        })
-
-        any_delivered = False
-        for sub in subs:
-            try:
-                webpush(
-                    subscription_info={
-                        "endpoint": sub["endpoint"],
-                        "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
-                    },
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY_FILE,
-                    vapid_claims=VAPID_CLAIMS.copy(),
-                    timeout=10  # never let one slow push service hang the app
-                )
-                any_delivered = True
-            except WebPushException as e:
-                # A 404/410 means the browser revoked this subscription (e.g. the
-                # person cleared site data or uninstalled). Clean it up silently.
-                status = getattr(e.response, "status_code", None)
-                if status in (404, 410):
-                    conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (sub["endpoint"],))
-                    conn.commit()
-            except Exception:
-                # Timeouts and network errors: log it and try again next run.
-                app.logger.exception("Push notification failed to send")
-
-        # Only tick the task off once a device actually received it. If every
-        # send failed (e.g. a temporary push-service error), the next run
-        # tries again — the 15-minute window gives it a few more chances.
-        if any_delivered:
+        }
+        # Only mark it sent once a device got it, so failures are retried.
+        if send_push_to_user(conn, task["user_id"], message):
             conn.execute("UPDATE tasks SET reminder_sent = 1 WHERE id = ?", (task["id"],))
             conn.commit()
             sent_count += 1

@@ -12,12 +12,13 @@ registered, then makes sure the database tables exist. The code lives in:
   settings.py   the settings page, theme, account reset and delete
   reminders.py  push notifications and the 5-minute reminder check
   alerts.py     emails you when something goes wrong
+  booking.py    booking links: other people put meetings in your planner
   backup/       the nightly database backup (run by GitHub)
 """
 from core import app
 from database import init_db
 
-import alerts, auth, pages, reminders, settings, tasks  # noqa: E401,F401
+import alerts, auth, booking, pages, reminders, settings, tasks  # noqa: E401,F401
 
 init_db()
 

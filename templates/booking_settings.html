@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="icon" type="image/png" sizes="32x32"
+        href="{{ url_for('static', filename='favicon-32.png') }}">
+  <title>Booking links | Agenndar</title>
+  <style>
+    @font-face {
+      font-family: 'Onest';
+      src: url("{{ url_for('static', filename='fonts/Onest-Variable.woff2') }}")
+          format('woff2');
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    :root {
+      --bg: #eef2f2; --card-bg: #ffffff; --text: #13201f; --border: #d9e1e1;
+      --subtext: #5b6b6b; --input-bg: #f6f8f8; --primary: #0b8a97;
+      --primary-hover: #08707b; --on-primary: #ffffff; --danger: #c2333a;
+      --ok: #15803d; color-scheme: light;
+    }
+    [data-theme="dark"] {
+      --bg: #0d1617; --card-bg: #142123; --text: #e6efef; --border: #23373a;
+      --subtext: #8fa3a3; --input-bg: #111c1e; --primary: #33d1de;
+      --primary-hover: #5cdce6; --on-primary: #062226; --danger: #ff7a7f;
+      --ok: #4ade80; color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Onest', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+      font-variant-numeric: tabular-nums;
+      background: var(--bg); color: var(--text); margin: 0; min-height: 100vh;
+      padding: calc(1.25rem + env(safe-area-inset-top)) 1rem
+        calc(2rem + env(safe-area-inset-bottom));
+    }
+    button, input { font-family: inherit; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .card { width: 100%; max-width: 620px; margin: 0 auto; }
+    .top-back { color: var(--primary); text-decoration: none; font-size: 0.88rem;
+                font-weight: 600; }
+    h2 { margin: 0.6rem 0 0.4rem; font-size: 1.6rem; font-weight: 650;
+         letter-spacing: -0.02em; }
+    p { font-size: 0.85rem; color: var(--subtext); line-height: 1.5;
+        margin: 0 0 1rem; }
+    .block {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 16px; padding: 1rem 1.1rem 1.1rem; margin-bottom: 0.9rem;
+    }
+    .section-title { font-size: 0.95rem; font-weight: 650; margin: 0 0 0.35rem; }
+    .flash {
+      border-radius: 10px; padding: 0.65rem 0.85rem; font-size: 0.85rem;
+      margin-bottom: 0.9rem; border: 1px solid var(--ok); color: var(--ok);
+      background: color-mix(in srgb, var(--ok) 10%, transparent);
+    }
+    .flash.error { border-color: var(--danger); color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 10%, transparent); }
+    .link-box { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .link-box input {
+      flex: 1; min-width: 0; padding: 0.65rem 0.75rem; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--input-bg);
+      color: var(--text); font-size: 0.85rem;
+    }
+    .btn {
+      padding: 0.6rem 0.9rem; border-radius: 10px; font-weight: 650;
+      font-size: 0.85rem; cursor: pointer; border: 1px solid var(--border);
+      background: var(--input-bg); color: var(--text);
+    }
+    .btn:hover { border-color: var(--primary); }
+    .btn.primary { background: var(--primary); border-color: var(--primary);
+                   color: var(--on-primary); }
+    .btn.quiet-danger { color: var(--danger); }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .btn-row form { margin: 0; }
+    .day-row {
+      display: grid; grid-template-columns: 7.5rem 1fr auto 1fr; gap: 0.5rem;
+      align-items: center; padding: 0.45rem 0; border-top: 1px solid var(--border);
+    }
+    p + .day-row { border-top: none; }
+    .day-row label { display: flex; align-items: center; gap: 0.45rem;
+                     font-size: 0.88rem; font-weight: 550; cursor: pointer; }
+    .day-row input[type="time"], .field input {
+      padding: 0.5rem 0.55rem; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--input-bg); color: var(--text); font-size: 0.88rem;
+      width: 100%; min-width: 0;
+    }
+    .day-row .to { color: var(--subtext); font-size: 0.8rem; }
+    .day-row.off input[type="time"] { opacity: 0.35; }
+    input[type="checkbox"] { width: 18px; height: 18px;
+                             accent-color: var(--primary); }
+    .pills { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+    .pills label {
+      position: relative; padding: 0.5rem 0.8rem; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--input-bg); font-size: 0.85rem;
+      cursor: pointer; user-select: none;
+    }
+    .pills input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .pills label:has(input:checked) { background: var(--text); color: var(--bg);
+                                      border-color: var(--text); }
+    .pills label:has(input:focus-visible) { outline: 2px solid var(--primary); }
+    .field { margin-top: 0.9rem; }
+    .field > span { display: block; font-size: 0.82rem; font-weight: 600;
+                    margin-bottom: 0.35rem; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+    .save {
+      width: 100%; margin-top: 1.1rem; padding: 0.85rem; border-radius: 12px;
+      border: none; background: var(--primary); color: var(--on-primary);
+      font-weight: 650; font-size: 0.95rem; cursor: pointer;
+    }
+    .save:hover { background: var(--primary-hover); }
+    @media (max-width: 420px) {
+      .day-row { grid-template-columns: 1fr 1fr; }
+      .day-row label { grid-column: 1 / -1; }
+      .day-row .to { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <a href="/settings" class="top-back">&larr; Settings</a>
+    <h2>Booking links</h2>
+    <p>Share a link and people can put meetings straight into your planner.
+       They only ever see when you're free, never what else you've planned.
+       You get a notification for every booking.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ 'error' if category == 'error' }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% for kind, title, about in [
+      ('public', 'Your booking link',
+       'For anyone you will meet. They pick one of your free slots, inside the '
+       ~ 'hours below, and give their name and email.'),
+      ('assistant', 'Assistant link',
+       'Only for someone you trust, like a secretary. They can book any time, '
+       ~ 'even outside your hours, and add tasks for you.')] %}
+    <div class="block">
+      <div class="section-title">{{ title }}</div>
+      <p>{{ about }}</p>
+      {% if links.get(kind) %}
+        <div class="link-box">
+          <input type="text" readonly value="{{ links[kind] }}" id="link-{{ kind }}"
+                 aria-label="{{ title }}">
+          <button type="button" class="btn primary"
+                  onclick="copyLink('{{ kind }}', this)">Copy</button>
+        </div>
+        <div class="btn-row">
+          <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn" name="action" value="new_{{ kind }}"
+                    onclick="return confirm('Make a new link? The old one will stop '
+                      + 'working.')">New link</button>
+          </form>
+          <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn quiet-danger" name="action"
+                    value="off_{{ kind }}">Turn off</button>
+          </form>
+        </div>
+      {% else %}
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn primary" name="action"
+                  value="new_{{ kind }}">Create link</button>
+        </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <form method="POST" class="block">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="section-title">When you're available</div>
+      <p>Your booking link only offers times inside these hours.
+         Times are in {{ settings.timezone }} time.</p>
+      {% for day in weekdays %}
+        {% set i = loop.index0 %}
+        {% set hours = settings.hours.get(i) %}
+        <div class="day-row {{ '' if hours else 'off' }}">
+          <label>
+            <input type="checkbox" name="day{{ i }}_on" value="1"
+                   {{ 'checked' if hours }} onchange="toggleDay(this)">
+            {{ day }}
+          </label>
+          <input type="time" name="day{{ i }}_start" step="900"
+                 value="{{ hours[0] if hours else '09:00' }}"
+                 aria-label="{{ day }} from">
+          <span class="to">to</span>
+          <input type="time" name="day{{ i }}_end" step="900"
+                 value="{{ hours[1] if hours else '17:00' }}"
+                 aria-label="{{ day }} until">
+        </div>
+      {% endfor %}
+
+      <div class="field">
+        <span>Meeting lengths people can choose</span>
+        <div class="pills">
+          {% for n in length_choices %}
+            <label><input type="checkbox" name="len{{ n }}" value="1"
+                   {{ 'checked' if n in settings.lengths }}>
+              {{ n if n < 60 else (n // 60 ~ ('.5' if n % 60 else '')) }}
+              {{ 'mins' if n < 60 else ('hour' if n == 60 else 'hours') }}</label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="two">
+        <label class="field"><span>Book up to (days ahead)</span>
+          <input type="number" name="days_ahead" min="1" max="60"
+                 value="{{ settings.days_ahead }}"></label>
+        <label class="field"><span>Earliest booking (hours from now)</span>
+          <input type="number" name="notice_hours" min="0" max="72"
+                 value="{{ settings.notice_hours }}"></label>
+      </div>
+
+      <label class="field"><span>Name people see on your booking page</span>
+        <input type="text" name="booking_name" maxlength="60"
+               value="{{ settings.name }}"></label>
+
+      <button type="submit" class="save" name="action" value="save">
+        Save booking settings</button>
+    </form>
+  </div>
+
+  <script>
+    function toggleDay(box) {
+      box.closest('.day-row').classList.toggle('off', !box.checked);
+    }
+    function copyLink(kind, btn) {
+      const input = document.getElementById('link-' + kind);
+      const done = () => {
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+      };
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(input.value).then(done, () => {
+          input.select(); document.execCommand('copy'); done();
+        });
+      } else {
+        input.select(); document.execCommand('copy'); done();
+      }
+    }
+  </script>
+</body>
+</html>

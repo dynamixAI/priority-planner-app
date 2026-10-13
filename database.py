@@ -60,6 +60,11 @@ def init_db():
         "ALTER TABLE users ADD COLUMN tour_seen INTEGER DEFAULT 0;",
         # When the user last opened their dashboard (for the admin stats).
         "ALTER TABLE users ADD COLUMN last_seen_at REAL DEFAULT 0;",
+        # Booking settings
+        "ALTER TABLE users ADD COLUMN booking_name TEXT DEFAULT '';",
+        "ALTER TABLE users ADD COLUMN booking_lengths TEXT DEFAULT '30,60';",
+        "ALTER TABLE users ADD COLUMN booking_days_ahead INTEGER DEFAULT 14;",
+        "ALTER TABLE users ADD COLUMN booking_notice_hours INTEGER DEFAULT 2;",
     ]:
         try:
             conn.execute(stmt)
@@ -111,6 +116,26 @@ def init_db():
             FOREIGN KEY (origin_id) REFERENCES tasks(id)
         );
     """)
+    # weekday: 0 = Monday ... 6 = Sunday
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS availability (
+            user_id INTEGER NOT NULL,
+            weekday INTEGER NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            PRIMARY KEY (user_id, weekday)
+        );
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS booking_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            active INTEGER DEFAULT 1,
+            created_at REAL DEFAULT 0
+        );
+    """)
     # Guarded task-column migrations for databases created before these
     # columns existed. They must run AFTER the CREATE TABLE above — on a
     # brand-new database the tasks table doesn't exist until then.
@@ -120,6 +145,13 @@ def init_db():
         "ALTER TABLE tasks ADD COLUMN completed_late INTEGER DEFAULT 0;",
         # When the task was added (for the admin stats). 0 for older tasks.
         "ALTER TABLE tasks ADD COLUMN created_at REAL DEFAULT 0;",
+        # Bookings
+        "ALTER TABLE tasks ADD COLUMN booked_by TEXT;",
+        "ALTER TABLE tasks ADD COLUMN booked_via TEXT;",
+        "ALTER TABLE tasks ADD COLUMN booking_ref TEXT;",
+        # Meetings: in_person / phone / online, outcome held / missed / no_show
+        "ALTER TABLE tasks ADD COLUMN meeting_type TEXT;",
+        "ALTER TABLE tasks ADD COLUMN meeting_outcome TEXT;",
     ]:
         try:
             conn.execute(stmt)
