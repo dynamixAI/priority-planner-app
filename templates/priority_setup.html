@@ -597,10 +597,35 @@
       }
     }
 
+    // Place the help box inside the screen's edges, under the "?" (or above it
+    // when there's no room below), so it never runs off a narrow phone screen.
+    function placeOverdueTooltip() {
+      const icon = document.getElementById('overdueInfoIcon');
+      const tip = document.getElementById('overdueTooltip');
+      const r = icon.getBoundingClientRect();
+      const w = Math.min(300, window.innerWidth - 32);
+      tip.style.position = 'fixed';
+      tip.style.right = 'auto';
+      tip.style.width = w + 'px';
+      tip.style.left = Math.max(16, Math.min(window.innerWidth - w - 16,
+        r.left + r.width / 2 - w / 2)) + 'px';
+      tip.style.top = (r.bottom + 8) + 'px';
+      const h = tip.offsetHeight;
+      if (h && r.bottom + 8 + h > window.innerHeight - 8 && r.top - 8 - h > 8) {
+        tip.style.top = (r.top - 8 - h) + 'px';
+      }
+    }
     function toggleOverdueTooltip(e) {
       e.stopPropagation();
-      document.getElementById('overdueTooltip').classList.toggle('show');
+      const tip = document.getElementById('overdueTooltip');
+      tip.classList.toggle('show');
+      if (tip.classList.contains('show')) placeOverdueTooltip();
     }
+    document.getElementById('overdueInfoIcon')
+      .addEventListener('mouseenter', placeOverdueTooltip);
+    window.addEventListener('scroll', () => {
+      document.getElementById('overdueTooltip').classList.remove('show');
+    }, { passive: true });
     document.addEventListener('click', function(e) {
       const icon = document.getElementById('overdueInfoIcon');
       const tooltip = document.getElementById('overdueTooltip');
