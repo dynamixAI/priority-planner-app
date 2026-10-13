@@ -1,4 +1,5 @@
 """Signing up, logging in, Google sign-in and deleting accounts."""
+import auth
 from conftest import login, register
 
 
@@ -42,41 +43,40 @@ def test_deleting_an_account_needs_the_password(client, db):
     assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
 
 
-def google_signin(client, app, monkeypatch, email, verified=True):
+def google_signin(client, monkeypatch, email, verified=True):
     def fake_google(url, form=None, token=None):
         if "token" in url:
             return {"access_token": "t"}
         return {"email": email, "email_verified": verified}
-    monkeypatch.setattr(app, "google_fetch_json", fake_google)
+    monkeypatch.setattr(auth, "google_fetch_json", fake_google)
     start = client.get("/auth/google")
     state = start.headers["Location"].split("state=")[1].split("&")[0]
     return client.get(f"/auth/google/callback?code=c&state={state}")
 
 
-def test_google_sign_in_creates_a_new_account(client, db, app, monkeypatch):
-    r = google_signin(client, app, monkeypatch, "New.Person@gmail.com")
+def test_google_sign_in_creates_a_new_account(client, db, monkeypatch):
+    r = google_signin(client, monkeypatch, "New.Person@gmail.com")
     assert r.headers["Location"].endswith("/priority-setup")
     row = db.execute("SELECT email, has_password FROM users").fetchone()
     assert row == ("new.person@gmail.com", 0)
 
 
-def test_google_sign_in_reuses_an_existing_account(client, db, app, monkeypatch):
+def test_google_sign_in_reuses_an_existing_account(client, db, monkeypatch):
     register(client, "sam", email="sam@example.com")
     client.get("/logout")
-    r = google_signin(client, app, monkeypatch, "SAM@example.com")
+    r = google_signin(client, monkeypatch, "SAM@example.com")
     assert r.headers["Location"].endswith("/dashboard")
     assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
 
 
-def test_google_sign_in_refuses_unverified_emails(client, db, app, monkeypatch):
-    r = google_signin(client, app, monkeypatch, "x@example.com", verified=False)
+def test_google_sign_in_refuses_unverified_emails(client, db, monkeypatch):
+    r = google_signin(client, monkeypatch, "x@example.com", verified=False)
     assert r.headers["Location"].endswith("/login")
     assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
 
 
-def test_a_google_only_account_deletes_with_a_confirmation(client, db, app,
-                                                           monkeypatch):
-    google_signin(client, app, monkeypatch, "g@example.com")
+def test_a_google_only_account_deletes_with_a_confirmation(client, db, monkeypatch):
+    google_signin(client, monkeypatch, "g@example.com")
     assert client.post("/api/account/delete", json={}).status_code == 400
     ok = client.post("/api/account/delete", json={"confirm": True})
     assert ok.status_code == 200

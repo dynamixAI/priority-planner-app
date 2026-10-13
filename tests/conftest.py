@@ -43,10 +43,6 @@ class FakeTurso:
 _current = {}
 
 
-def _get_db():
-    return _current["conn"]
-
-
 # Point the app at a throwaway database BEFORE it starts (it creates its
 # tables on import).
 import turso_http  # noqa: E402
@@ -55,9 +51,11 @@ _current["conn"] = FakeTurso(":memory:")
 turso_http.TursoHTTPConnection = lambda *a, **k: _current["conn"]
 
 import app as app_module  # noqa: E402
+import core, pages, reminders, tasks  # noqa: E401,E402
 
-app_module.get_db = _get_db
-app_module.user_now = lambda tz_name: FROZEN_NOW
+# Freeze the clock everywhere the app asks "what time is it for this user?"
+for part in (core, pages, reminders, tasks):
+    part.user_now = lambda tz_name: FROZEN_NOW
 app_module.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
 
 
@@ -72,11 +70,6 @@ def db(tmp_path):
 @pytest.fixture
 def client(db):
     return app_module.app.test_client()
-
-
-@pytest.fixture
-def app():
-    return app_module
 
 
 def register(client, username="sam", password="pass1234", email=None):

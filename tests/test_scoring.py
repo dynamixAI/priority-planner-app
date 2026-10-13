@@ -8,6 +8,7 @@ Moving a task before it's due ("replanned") and tasks not due yet are not
 judged at all.
 """
 from conftest import FROZEN_NOW
+from scoring import compute_metrics
 
 
 def make_tasks(db, user_id, rows):
@@ -20,8 +21,8 @@ def make_tasks(db, user_id, rows):
     db.commit()
 
 
-def score(app, db, user_id, threshold=14):
-    return app.compute_metrics(db, user_id, FROZEN_NOW, threshold)
+def score(db, user_id, threshold=14):
+    return compute_metrics(db, user_id, FROZEN_NOW, threshold)
 
 
 def new_user(db):
@@ -31,27 +32,27 @@ def new_user(db):
     return db.execute("SELECT id FROM users WHERE username = 'u'").fetchone()[0]
 
 
-def test_a_new_user_with_no_tasks_starts_at_100(app, db):
-    m = score(app, db, new_user(db))
+def test_a_new_user_with_no_tasks_starts_at_100(db):
+    m = score(db, new_user(db))
     assert m["bhi_score"] == 100.0
     assert m["bhi_tier"] == "Disciplined"
 
 
-def test_everything_done_on_time_scores_100(app, db):
+def test_everything_done_on_time_scores_100(db):
     uid = new_user(db)
     make_tasks(db, uid, [("2026-10-12", "09:00", "completed", 0)] * 3)
-    assert score(app, db, uid)["bhi_score"] == 100.0
+    assert score(db, uid)["bhi_score"] == 100.0
 
 
-def test_done_late_counts_less_than_done_on_time(app, db):
+def test_done_late_counts_less_than_done_on_time(db):
     uid = new_user(db)
     make_tasks(db, uid, [("2026-10-12", "09:00", "completed", 1)])
-    m = score(app, db, uid)
+    m = score(db, uid)
     assert m["bhi_score"] == 70.0       # 0.7 out of 1
     assert m["done"] == 1 and m["done_late"] == 1
 
 
-def test_one_of_each_outcome(app, db):
+def test_one_of_each_outcome(db):
     uid = new_user(db)
     make_tasks(db, uid, [
         ("2026-10-12", "09:00", "completed", 0),    # +1.0
@@ -59,56 +60,56 @@ def test_one_of_each_outcome(app, db):
         ("2026-10-12", "11:00", "rescheduled", 0),  # +0.4 (pushed after due)
         ("2026-10-12", "12:00", "missed", 0),       # -0.6
     ])
-    m = score(app, db, uid)
+    m = score(db, uid)
     assert m["bhi_score"] == 37.5       # (1 + 0.7 + 0.4 - 0.6) / 4 * 100
     assert m["bhi_tier"] == "Avoidance"
     assert (m["pushed"], m["missed"]) == (1, 1)
 
 
-def test_moving_a_task_before_it_is_due_is_not_judged(app, db):
+def test_moving_a_task_before_it_is_due_is_not_judged(db):
     uid = new_user(db)
     make_tasks(db, uid, [
         ("2026-10-12", "09:00", "completed", 0),
         ("2026-10-12", "10:00", "replanned", 0),    # free move: ignored
     ])
-    assert score(app, db, uid)["bhi_score"] == 100.0
+    assert score(db, uid)["bhi_score"] == 100.0
 
 
-def test_tasks_not_due_yet_are_not_judged(app, db):
+def test_tasks_not_due_yet_are_not_judged(db):
     uid = new_user(db)
     make_tasks(db, uid, [
         ("2026-10-12", "09:00", "completed", 0),
         ("2026-10-13", "18:00", "pending", 0),      # later today
         ("2026-10-20", "09:00", "pending", 0),      # next week
     ])
-    m = score(app, db, uid)
+    m = score(db, uid)
     assert m["bhi_score"] == 100.0
     assert m["total_logged"] == 3       # still counted as logged
 
 
-def test_a_task_left_open_past_the_threshold_costs_extra(app, db):
+def test_a_task_left_open_past_the_threshold_costs_extra(db):
     uid = new_user(db)
     make_tasks(db, uid, [
         ("2026-10-12", "09:00", "completed", 0),
         ("2026-09-01", "09:00", "pending", 0),      # 6 weeks old, still open
     ])
     # The old open task is judged (0) and flagged overdue (-0.3): (1 - 0.3) / 2
-    assert score(app, db, uid, threshold=14)["bhi_score"] == 35.0
+    assert score(db, uid, threshold=14)["bhi_score"] == 35.0
     # With a 60-day threshold it isn't overdue yet: 1 / 2
-    assert score(app, db, uid, threshold=60)["bhi_score"] == 50.0
+    assert score(db, uid, threshold=60)["bhi_score"] == 50.0
 
 
-def test_the_score_never_goes_below_zero(app, db):
+def test_the_score_never_goes_below_zero(db):
     uid = new_user(db)
     make_tasks(db, uid, [("2026-10-12", "09:00", "missed", 0)] * 5)
-    assert score(app, db, uid)["bhi_score"] == 0
+    assert score(db, uid)["bhi_score"] == 0
 
 
-def test_tiers(app, db):
+def test_tiers(db):
     uid = new_user(db)
     make_tasks(db, uid, [
         ("2026-10-12", "09:00", "completed", 0),
         ("2026-10-12", "10:00", "rescheduled", 0),
     ])
-    m = score(app, db, uid)            # (1 + 0.4) / 2 = 70
+    m = score(db, uid)            # (1 + 0.4) / 2 = 70
     assert (m["bhi_score"], m["bhi_tier"]) == (70.0, "Drifting")

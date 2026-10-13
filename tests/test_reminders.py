@@ -2,16 +2,17 @@
 only marked as sent when a device actually received them."""
 import pytest
 
+import reminders
 from conftest import add_task
 
 CRON = "/api/cron/send-reminders?secret=test-cron-secret"
 
 
 @pytest.fixture
-def pushes(app, monkeypatch):
+def pushes(monkeypatch):
     """Records reminders instead of really sending them."""
     sent = []
-    monkeypatch.setattr(app, "webpush", lambda **kw: sent.append(kw["data"]))
+    monkeypatch.setattr(reminders, "webpush", lambda **kw: sent.append(kw["data"]))
     return sent
 
 
@@ -53,12 +54,12 @@ def test_no_device_means_the_reminder_waits_for_one(user, db, pushes):
     assert reminded(db, "Call the bank") == 0               # can still be sent later
 
 
-def test_a_failed_send_is_tried_again_next_time(user, db, app, monkeypatch):
+def test_a_failed_send_is_tried_again_next_time(user, db, monkeypatch):
     add_device(db)
     add_task(user, title="Call the bank", time="10:10")
 
     def broken(**kw):
         raise TimeoutError("push service down")
-    monkeypatch.setattr(app, "webpush", broken)
+    monkeypatch.setattr(reminders, "webpush", broken)
     assert user.get(CRON).get_json()["sent"] == 0
     assert reminded(db, "Call the bank") == 0
