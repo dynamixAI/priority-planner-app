@@ -11,11 +11,13 @@ registered, then makes sure the database tables exist. The code lives in:
   tasks.py      adding, finishing, moving and deleting tasks
   settings.py   the settings page, theme, account reset and delete
   reminders.py  push notifications and the 5-minute reminder check
+  alerts.py     emails you when something goes wrong
+  backup/       the nightly database backup (run by GitHub)
 """
 from core import app
 from database import init_db
 
-import auth, pages, reminders, settings, tasks  # noqa: E401,F401
+import alerts, auth, pages, reminders, settings, tasks  # noqa: E401,F401
 
 init_db()
 

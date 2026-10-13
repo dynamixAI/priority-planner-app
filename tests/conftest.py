@@ -22,6 +22,7 @@ os.environ.setdefault("TURSO_AUTH_TOKEN", "test-token")
 os.environ["CRON_SECRET"] = "test-cron-secret"
 os.environ.setdefault("GOOGLE_CLIENT_ID", "test-client.apps.googleusercontent.com")
 os.environ.setdefault("GOOGLE_CLIENT_SECRET", "test-google-secret")
+os.environ["ALERT_EMAIL"] = "owner@example.com"
 
 FROZEN_NOW = datetime(2026, 10, 13, 10, 0)  # Tue 13 Oct 2026, 10:00 UK time
 TODAY = "2026-10-13"
@@ -51,7 +52,7 @@ _current["conn"] = FakeTurso(":memory:")
 turso_http.TursoHTTPConnection = lambda *a, **k: _current["conn"]
 
 import app as app_module  # noqa: E402
-import core, pages, reminders, tasks  # noqa: E401,E402
+import alerts, core, pages, reminders, tasks  # noqa: E401,E402
 
 # Freeze the clock everywhere the app asks "what time is it for this user?"
 for part in (core, pages, reminders, tasks):
@@ -65,6 +66,17 @@ def db(tmp_path):
     _current["conn"] = FakeTurso(str(tmp_path / "test.db"))
     app_module.init_db()
     return _current["conn"]
+
+
+@pytest.fixture(autouse=True)
+def alerts_sent(monkeypatch):
+    """Error alert emails are collected here instead of being sent."""
+    sent = []
+    monkeypatch.setattr(alerts, "_send_in_background",
+                        lambda subject, body: sent.append((subject, body)))
+    monkeypatch.setitem(alerts._state, "last_sent", 0.0)
+    monkeypatch.setitem(alerts._state, "held_back", 0)
+    return sent
 
 
 @pytest.fixture

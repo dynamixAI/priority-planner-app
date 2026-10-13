@@ -1,0 +1,37 @@
+name: backup
+
+on:
+  schedule:
+    - cron: "17 2 * * *"   # every night at 02:17 UTC
+  workflow_dispatch:        # adds a "Run workflow" button on the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Copy the database
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_BACKUP_TOKEN: ${{ secrets.TURSO_BACKUP_TOKEN }}
+        run: python backup/dump.py agenndar-backup.sql
+      - name: Compress and lock it
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$BACKUP_PASSPHRASE" || { echo "No passphrase"; exit 1; }
+          gzip -9 agenndar-backup.sql
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -pass env:BACKUP_PASSPHRASE \
+            -in agenndar-backup.sql.gz -out agenndar-backup.sql.gz.enc
+          rm agenndar-backup.sql.gz
+          echo "STAMP=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agenndar-backup-${{ env.STAMP }}
+          path: agenndar-backup.sql.gz.enc
+          retention-days: 30
+          if-no-files-found: error
