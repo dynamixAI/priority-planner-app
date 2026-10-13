@@ -72,9 +72,9 @@ def nice_date(date_str):
 
 def booking_settings(conn, user_id):
     user = fetch_one(conn, (
-        "SELECT username, timezone, time_format, booking_name, booking_lengths, "
-        "booking_days_ahead, booking_notice_hours FROM users WHERE id = ?"),
-        (user_id,)) or {}
+        "SELECT username, email, timezone, time_format, booking_name, "
+        "booking_lengths, booking_days_ahead, booking_notice_hours "
+        "FROM users WHERE id = ?"), (user_id,)) or {}
     lengths = []
     for part in (user.get("booking_lengths") or "30,60").split(","):
         if part.strip().isdigit() and int(part) in LENGTH_CHOICES:
@@ -84,10 +84,14 @@ def booking_settings(conn, user_id):
             "SELECT weekday, start_time, end_time FROM availability "
             "WHERE user_id = ?"), (user_id,)):
         hours[row["weekday"]] = (row["start_time"], row["end_time"])
+    timezone = clean_timezone(user.get("timezone") or "")
     return {
-        "name": (user.get("booking_name") or "").strip()
-        or user.get("username") or "Agenndar user",
-        "timezone": clean_timezone(user.get("timezone") or ""),
+        # shown to guests only if the owner set it
+        "name": (user.get("booking_name") or "").strip(),
+        "email": user.get("email") or "",
+        "timezone": timezone,
+        "tz_label": "UTC" if timezone == "UTC"
+        else timezone.split("/")[-1].replace("_", " ") + " time",
         "time_format": user.get("time_format") or "24h",
         "lengths": lengths or [30, 60],
         "days_ahead": user.get("booking_days_ahead") or 14,
@@ -156,10 +160,14 @@ def _notify_owner_later(user_id, title, body):
     threading.Thread(target=run, daemon=True).start()
 
 
-def _email_later(to_email, subject, body):
+def with_name(settings):
+    return " with " + settings["name"] if settings["name"] else ""
+
+
+def _email_later(to_email, subject, body, reply_to=None):
     def run():
         try:
-            send_email(to_email, subject, body)
+            send_email(to_email, subject, body, reply_to)
         except Exception:
             app.logger.exception("Booking confirmation email failed to send")
     threading.Thread(target=run, daemon=True).start()
@@ -269,8 +277,8 @@ def book(token):
     if not trusted and not settings["hours"]:
         return render_template(
             "book_message.html", heading="Not taking bookings right now",
-            message="%s hasn't set any available hours yet. Please check back "
-                    "later." % settings["name"]), 200
+            message="This booking page isn't open yet. Please check back "
+                    "later."), 200
 
     lengths = LENGTH_CHOICES if trusted else settings["lengths"]
     first = now.strftime("%Y-%m-%d")
@@ -302,7 +310,7 @@ def book(token):
 
     return render_template(
         "book.html", owner=settings["name"], trusted=trusted, lengths=lengths,
-        slots=slots, timezone=settings["timezone"],
+        slots=slots, tz_label=settings["tz_label"],
         time_format=settings["time_format"], today=first,
         types=MEETING_TYPES if trusted else
         {k: MEETING_TYPES[k] for k in PUBLIC_TYPES},
@@ -393,12 +401,13 @@ def save_booking(conn, link, settings, b):
     conn.execute(
         "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, "
         "duration_minutes, priority_id, status, created_at, booked_by, booked_via, "
-        "booking_ref, meeting_type) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+        "booking_ref, meeting_type, booked_email) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)",
         (link["user_id"], title[:MAX_TITLE_LEN], "\n".join(lines)[:MAX_TEXT_LEN],
          location, b["date"], b["time"], duration_text(b["length"]), b["length"],
          (priority or {}).get("id"), time.time(), b["name"] or None,
-         link["kind"], b["ref"], None if b["kind"] == "task" else b["kind"]))
+         link["kind"], b["ref"], None if b["kind"] == "task" else b["kind"],
+         b["email"] or None))
     conn.commit()
 
     when = "%s at %s" % (nice_date(b["date"])[:-5],
@@ -407,25 +416,60 @@ def save_booking(conn, link, settings, b):
                         "%s - %s, %s" % (b["name"] or b["topic"], label, when))
 
 
+def when_text(settings, date, time_str):
+    return "%s at %s (%s)" % (
+        nice_date(date), format_time(time_str, settings["time_format"]),
+        settings["tz_label"])
+
+
 def booked_page(link, settings, b):
-    when = "%s at %s (%s time)" % (
-        nice_date(b["date"]), format_time(b["time"], settings["time_format"]),
-        settings["timezone"])
+    when = when_text(settings, b["date"], b["time"])
+    label = MEETING_TYPES[b["kind"]]
     if b["email"] and link["kind"] == "public":
         cancel = full_url("cancel_booking", ref=b["ref"])
-        _email_later(b["email"], "Booked: %s with %s" % (
-            MEETING_TYPES[b["kind"]], settings["name"]), "\n".join([
-                "Hi %s," % b["name"], "",
-                "Your %s with %s is booked for %s." % (
-                    MEETING_TYPES[b["kind"]].lower(), settings["name"], when),
-                "", "Can't make it? Cancel here: " + cancel, "",
-                "Sent by Agenndar on behalf of %s." % settings["name"]]))
-        message = "It's in %s's planner for %s. We've emailed a confirmation " \
-                  "to %s." % (settings["name"], when, b["email"])
+        _email_later(b["email"], "Booked: %s%s" % (label, with_name(settings)),
+                     "\n".join([
+                         "Hi %s," % b["name"], "",
+                         "Your %s%s is booked for %s." % (
+                             label.lower(), with_name(settings), when),
+                         "", "Can't make it? Cancel here: " + cancel, "",
+                         "You can reply to this email to get in touch."]),
+                     reply_to=settings["email"])
+        message = "Booked for %s. A confirmation is on its way to %s." % (
+            when, b["email"])
     else:
-        message = "It's in %s's planner for %s." % (settings["name"], when)
+        message = "Booked for %s." % when
     return render_template("book_message.html", heading="You're booked",
                            message=message)
+
+
+def guest_email(task):
+    if task.get("booked_email"):
+        return task["booked_email"]
+    found = re.search(r"^Email: (\S+@\S+)$", task.get("detail") or "", re.M)
+    return found.group(1) if found else None
+
+
+def email_guest_about_move(conn, task, new_date, new_time, note):
+    """Emails the person who booked a meeting its new time."""
+    to = guest_email(task)
+    if not to or not task.get("booking_ref"):
+        return False
+    settings = booking_settings(conn, task["user_id"])
+    label = MEETING_TYPES.get(task.get("meeting_type"), "Meeting")
+    lines = ["Hi %s," % (task.get("booked_by") or "there"), ""]
+    if note:
+        lines += [note, ""]
+    lines += [
+        "Your %s%s has moved to %s." % (
+            label.lower(), with_name(settings),
+            when_text(settings, new_date, new_time)),
+        "", "Can't make it? Cancel here: "
+        + full_url("cancel_booking", ref=task["booking_ref"]), "",
+        "You can reply to this email to get in touch."]
+    _email_later(to, "New time: %s%s" % (label, with_name(settings)),
+                 "\n".join(lines), reply_to=settings["email"])
+    return True
 
 
 @app.route("/booking/<ref>/cancel", methods=["GET", "POST"])
@@ -440,8 +484,8 @@ def cancel_booking(ref):
     if task["status"] != "pending":
         return render_template(
             "book_message.html", heading="This booking can't be cancelled here",
-            message="It has already been moved or finished. Please contact %s "
-                    "directly." % settings["name"])
+            message="It has already been moved or finished. Please reply to "
+                    "your confirmation email instead.")
     if request.method == "POST":
         conn.execute("UPDATE tasks SET origin_id = NULL WHERE origin_id = ?",
                      (task["id"],))
@@ -455,7 +499,7 @@ def cancel_booking(ref):
             message="Your booking for %s has been cancelled." % when)
     return render_template(
         "book_message.html", heading="Cancel this booking?",
-        message="%s with %s, %s." % (task["title"], settings["name"], when),
+        message="%s, %s." % (task["title"], when),
         cancel_form=True)
 
 

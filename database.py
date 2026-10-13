@@ -149,6 +149,7 @@ def init_db():
         "ALTER TABLE tasks ADD COLUMN booked_by TEXT;",
         "ALTER TABLE tasks ADD COLUMN booked_via TEXT;",
         "ALTER TABLE tasks ADD COLUMN booking_ref TEXT;",
+        "ALTER TABLE tasks ADD COLUMN booked_email TEXT;",
         # Meetings: in_person / phone / online, outcome held / missed / no_show
         "ALTER TABLE tasks ADD COLUMN meeting_type TEXT;",
         "ALTER TABLE tasks ADD COLUMN meeting_outcome TEXT;",

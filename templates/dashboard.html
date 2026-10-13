@@ -1080,6 +1080,22 @@
       border-color: #e5484d; border-left-color: #e5484d;
     }
     .meetings-btn { position: relative; text-decoration: none; color: inherit; }
+    .notify-box {
+      padding: 0.75rem; border-radius: 12px; background: var(--table-header);
+      border: 1px solid var(--border);
+    }
+    .form-group .notify-check {
+      display: flex; gap: 0.5rem; align-items: center; margin: 0 0 0.5rem;
+      font-size: 0.85rem; font-weight: 600; color: var(--text); cursor: pointer;
+    }
+    .notify-check input { width: 17px; height: 17px; accent-color: #7c5cd6; }
+    #notifyMessage {
+      width: 100%; padding: 0.6rem 0.7rem; border-radius: 10px; resize: vertical;
+      border: 1px solid var(--border); background: var(--card-bg);
+      color: var(--text); font: inherit; font-size: 0.85rem;
+    }
+    #notifyMessage:disabled { opacity: 0.5; }
+    .notify-hint { font-size: 0.74rem; color: var(--metric-muted); margin-top: 0.35rem; }
     .nav-badge {
       position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px;
       padding: 0 5px; border-radius: 99px; background: #7c5cd6; color: #fff;
@@ -2059,11 +2075,22 @@
         <input type="hidden" id="rescheduleTime" value="09:00">
       </div>
 
+      <div class="form-group notify-box" id="notifyBox" style="display:none;">
+        <label class="notify-check">
+          <input type="checkbox" id="notifyGuest" checked
+                 onchange="document.getElementById('notifyMessage').disabled = !this.checked">
+          <span>Email <span id="notifyName">them</span> the new time</span>
+        </label>
+        <textarea id="notifyMessage" rows="3" maxlength="600"></textarea>
+        <div class="notify-hint">Edit the message or write your own. Replies come
+          to your email.</div>
+      </div>
+
       <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
         <button type="button" class="btn-create" style="background: transparent; border: 1px solid var(--border); color: var(--text);" onclick="closeRescheduleModal()">
           Cancel
         </button>
-        <button type="button" class="btn-create" style="background: #ea580c;" onclick="submitReschedule()">
+        <button type="button" class="btn-create" id="rescheduleConfirmBtn" style="background: #ea580c;" onclick="submitReschedule()">
           Confirm Reschedule
         </button>
       </div>
@@ -3995,6 +4022,22 @@
       const titleEl = document.getElementById('rescheduleHeaderTitle');
       const subtitleEl = document.getElementById('rescheduleSubtitle');
 
+      const guestEmail = task.booked_email
+        || ((task.detail || '').match(/^Email: (\S+@\S+)$/m) || [])[1];
+      const canNotify = !!(task.meeting_type && guestEmail && task.booking_ref);
+      document.getElementById('notifyBox').style.display = canNotify ? '' : 'none';
+      if (canNotify) {
+        document.getElementById('notifyName').textContent =
+          (task.booked_by || 'them').split(' ')[0];
+        document.getElementById('notifyGuest').checked = true;
+        const msg = document.getElementById('notifyMessage');
+        msg.disabled = false;
+        msg.value = "Sorry, I've had to move our meeting. "
+          + "I hope the new time below works for you.";
+      }
+
+      document.getElementById('rescheduleConfirmBtn').textContent =
+        task.meeting_type ? 'Move meeting' : 'Confirm Reschedule';
       if (task.meeting_type) {
         titleEl.innerText = "📅 Move meeting";
         subtitleEl.innerText = `Move "${task.title}" to a new time. Meetings don't affect your Behaviour Index.`;
@@ -4028,6 +4071,9 @@
       }
 
       const currentTask = allUserTasks.find(t => t.id === Number(taskId));
+      const notifyOn = document.getElementById('notifyBox').style.display !== 'none'
+        && document.getElementById('notifyGuest').checked;
+      const notifyMessage = document.getElementById('notifyMessage').value.trim();
       const durationForCheck = currentTask ? (currentTask.duration_minutes || 60) : 60;
       const proceed = await warnIfOverlapping(new_date, new_time, durationForCheck, Number(taskId));
       if (!proceed) return;
@@ -4052,7 +4098,8 @@
         res = await fetch('/api/task/reschedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ task_id: taskId, new_date, new_time })
+          body: JSON.stringify({ task_id: taskId, new_date, new_time,
+                                 notify: notifyOn, message: notifyMessage })
         });
         result = await res.json();
       } catch (e) {
@@ -4061,7 +4108,8 @@
 
       if (res && res.ok) {
         if (currentTask && currentTask.meeting_type) {
-          showToast("Meeting moved.", 3500);
+          showToast(result.emailed ? "Meeting moved. We've emailed them the new time."
+                                   : "Meeting moved.", 4000);
         } else if (result.result === "replanned") {
           showToast("Moved. It wasn't due yet, so your Behaviour Index isn't affected.", 4500);
         } else if (result.result === "missed_kept") {

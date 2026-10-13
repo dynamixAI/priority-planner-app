@@ -9,6 +9,7 @@ from flask import jsonify, request, session
 from core import (DEFAULT_ACTIVE_DAYS, MAX_TEXT_LEN, MAX_TITLE_LEN, app,
                   clean_date, clean_text, clean_time, clean_timezone,
                   fetch_all, fetch_one, get_db, user_now)
+import booking
 from scoring import compute_metrics, fetch_attention_tasks
 
 
@@ -272,16 +273,21 @@ def reschedule_task():
 
     # The guest's cancel link moves to the new copy
     conn.execute(
-        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id, meeting_type, booked_by, booked_via, booking_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, duration_minutes, priority_id, status, origin_id, meeting_type, booked_by, booked_via, booking_ref, booked_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)",
         (session["user_id"], task["title"], task["detail"], task["location"],
          new_date, new_time, task["duration"], task["duration_minutes"] or 60, task["priority_id"], origin,
          task.get("meeting_type"), task.get("booked_by"), task.get("booked_via"),
-         task.get("booking_ref"))
+         task.get("booking_ref"), task.get("booked_email"))
     )
     if task.get("booking_ref"):
         conn.execute("UPDATE tasks SET booking_ref = NULL WHERE id = ?", (task["id"],))
     conn.commit()
-    return jsonify({"status": "success", "result": result_label})
+    emailed = False
+    if task.get("meeting_type") and data.get("notify"):
+        emailed = booking.email_guest_about_move(
+            conn, task, new_date, new_time, clean_text(data.get("message"), 600))
+    return jsonify({"status": "success", "result": result_label,
+                    "emailed": emailed})
 
 
 @app.route("/api/task/dismiss-followup", methods=["POST"])

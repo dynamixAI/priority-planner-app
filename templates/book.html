@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" sizes="32x32"
         href="{{ url_for('static', filename='favicon-32.png') }}">
-  <title>Book with {{ owner }} | Agenndar</title>
+  <title>Book an appointment | Agenndar</title>
   {% include "_book_style.html" %}
   <style>
     .book { max-width: 560px; }
@@ -17,8 +17,12 @@
       display: grid; place-items: center; font-size: 1.35rem; font-weight: 700;
       background: var(--soft); color: var(--primary);
     }
-    .who h1 { margin: 0.1rem 0 0.15rem; }
-    .who p { margin: 0; font-size: 0.84rem; }
+    .who h1 { margin: 0.1rem 0 0.1rem; }
+    .who p { margin: 0; font-size: 0.9rem; }
+    .tz { display: inline-block; margin-top: 0.35rem; padding: 0.15rem 0.55rem;
+          border-radius: 99px; background: var(--input-bg);
+          border: 1px solid var(--border); font-size: 0.75rem;
+          color: var(--subtext); }
 
     .lengths {
       display: flex; gap: 4px; padding: 4px; margin: 1.3rem 0 1rem;
@@ -175,14 +179,19 @@
 <body>
   <main class="card book">
     <header class="who">
-      <div class="avatar" aria-hidden="true">{{ owner[:1]|upper }}</div>
+      <div class="avatar" aria-hidden="true">
+        {% if owner %}{{ owner[:1]|upper }}{% else %}
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="3" y="5" width="18" height="16" rx="3"/>
+          <path d="M3 10h18M8 3v4M16 3v4"/>
+        </svg>{% endif %}
+      </div>
       <div>
         <div class="brand">Agenndar</div>
-        <h1>{{ 'Add to ' ~ owner ~ "'s planner" if trusted
-               else 'Book with ' ~ owner }}</h1>
-        <p>{% if trusted %}Assistant link. Pick a free time, or any time
-           that doesn't clash.{% else %}Pick a day, then a time that suits
-           you.{% endif %} Times are in {{ timezone }} time.</p>
+        <h1>{{ 'Add to the planner' if trusted else 'Book an appointment' }}</h1>
+        {% if owner %}<p>with {{ owner }}</p>{% endif %}
+        <span class="tz">🕒 {{ tz_label }}</span>
       </div>
     </header>
 

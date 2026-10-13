@@ -15,7 +15,8 @@ def told(monkeypatch):
     monkeypatch.setattr(booking, "_notify_owner_later",
                         lambda uid, title, body: sent["push"].append(body))
     monkeypatch.setattr(booking, "_email_later",
-                        lambda to, subject, body: sent["email"].append((to, body)))
+                        lambda to, subject, body, reply_to=None:
+                        sent["email"].append((to, body)))
     return sent
 
 
@@ -71,7 +72,7 @@ def test_the_page_shows_free_times_but_never_your_task_names(user, db, guest):
     add_task(user, title="Secret dentist visit", date=WED, time="10:00")
     token = make_link(user, db)
     page = guest.get("/book/" + token).get_data(as_text=True)
-    assert "Book with Sam" in page
+    assert "Book an appointment" in page and "with Sam" in page
     assert "Secret dentist visit" not in page
     slots = booking.free_slots(booking.booking_settings(db, 1),
                                booking.busy_by_date(db, 1, TUE, SAT), 60,
@@ -194,3 +195,36 @@ def test_deleting_your_account_removes_your_booking_links(user, db):
     user.post("/api/account/delete", json={"password": "pass1234"})
     assert db.execute("SELECT COUNT(*) FROM booking_links").fetchone()[0] == 0
     assert db.execute("SELECT COUNT(*) FROM availability").fetchone()[0] == 0
+
+
+def move(owner, db, notify, message=""):
+    tid = db.execute("SELECT id FROM tasks WHERE status = 'pending'").fetchone()[0]
+    return owner.post("/api/task/reschedule", json={
+        "task_id": tid, "new_date": WED, "new_time": "11:00",
+        "notify": notify, "message": message})
+
+
+def test_moving_a_booking_can_email_the_guest(user, db, guest, told):
+    set_hours(user)
+    book(guest, make_link(user, db))
+    r = move(user, db, True, "Something came up, sorry!")
+    assert r.get_json()["emailed"] is True
+    to, email = told["email"][-1]
+    assert to == "ada@example.com"
+    assert "Something came up, sorry!" in email
+    assert "Wed 14 Oct 2026 at 11:00 (London time)" in email
+    assert "/booking/" in email
+
+
+def test_moving_a_booking_without_emailing(user, db, guest, told):
+    set_hours(user)
+    book(guest, make_link(user, db))
+    before = len(told["email"])
+    assert move(user, db, False).get_json()["emailed"] is False
+    assert len(told["email"]) == before
+
+
+def test_your_username_is_not_shown_without_a_booking_name(user, db, guest):
+    set_hours(user, booking_name="")
+    page = guest.get("/book/" + make_link(user, db)).get_data(as_text=True)
+    assert "Book an appointment" in page and "sam" not in page.lower()

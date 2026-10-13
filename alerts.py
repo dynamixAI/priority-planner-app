@@ -25,12 +25,14 @@ _lock = threading.Lock()
 _log = logging.getLogger("agenndar.alerts")
 
 
-def send_email(to_email, subject, body):
+def send_email(to_email, subject, body, reply_to=None):
     sender = os.environ["SENDER_EMAIL"]
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = to_email
+    if reply_to:
+        msg["Reply-To"] = reply_to
     port = int(os.environ.get("SMTP_PORT", 587))
     with smtplib.SMTP(os.environ["SMTP_SERVER"], port, timeout=15) as server:
         server.starttls()
