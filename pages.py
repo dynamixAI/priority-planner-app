@@ -125,6 +125,10 @@ def dashboard():
         "SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'pending' "
         "AND meeting_type IS NOT NULL AND (date < ? OR (date = ? AND time <= ?))"),
         (user_id, today_str, today_str, now_dt.strftime("%H:%M"))) or {}).get("n") or 0
+    new_bookings = (fetch_one(conn, (
+        "SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'pending' "
+        "AND meeting_type IS NOT NULL AND booking_seen = 0"),
+        (user_id,)) or {}).get("n") or 0
 
     week_dates_iso = [d.strftime("%Y-%m-%d") for d in visible_week_dates]
 
@@ -136,6 +140,7 @@ def dashboard():
         tasks=tasks,
         attention_tasks=attention_tasks,
         meetings_waiting=meetings_waiting,
+        new_bookings=new_bookings,
         week_dates=visible_week_dates,
         week_dates_iso=week_dates_iso,
         week_start_pref=week_start_pref,

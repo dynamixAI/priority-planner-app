@@ -401,13 +401,13 @@ def save_booking(conn, link, settings, b):
     conn.execute(
         "INSERT INTO tasks (user_id, title, detail, location, date, time, duration, "
         "duration_minutes, priority_id, status, created_at, booked_by, booked_via, "
-        "booking_ref, meeting_type, booked_email) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)",
+        "booking_ref, meeting_type, booked_email, booking_seen) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)",
         (link["user_id"], title[:MAX_TITLE_LEN], "\n".join(lines)[:MAX_TEXT_LEN],
          location, b["date"], b["time"], duration_text(b["length"]), b["length"],
          (priority or {}).get("id"), time.time(), b["name"] or None,
          link["kind"], b["ref"], None if b["kind"] == "task" else b["kind"],
-         b["email"] or None))
+         b["email"] or None, 1 if b["kind"] == "task" else 0))
     conn.commit()
 
     when = "%s at %s" % (nice_date(b["date"])[:-5],
@@ -521,6 +521,11 @@ def meetings():
     open_ones = fetch_all(conn, (
         "SELECT * FROM tasks WHERE user_id = ? AND meeting_type IS NOT NULL "
         "AND status = 'pending' ORDER BY date ASC, time ASC"), (user_id,))
+    new_ids = [t["id"] for t in open_ones if t.get("booking_seen") == 0]
+    if new_ids:
+        conn.execute("UPDATE tasks SET booking_seen = 1 WHERE user_id = ? "
+                     "AND booking_seen = 0", (user_id,))
+        conn.commit()
     waiting = [t for t in open_ones if has_started(t, now)]
     upcoming = [t for t in open_ones if not has_started(t, now)]
     earlier = fetch_all(conn, (
@@ -549,7 +554,8 @@ def meetings():
     return render_template(
         "meetings.html", theme=user.get("theme") or "light", waiting=waiting,
         upcoming=upcoming, earlier=earlier, record=record, outcomes=OUTCOMES,
-        types=MEETING_TYPES, when=when, has_link=bool(has_link))
+        types=MEETING_TYPES, when=when, has_link=bool(has_link),
+        new_ids=new_ids)
 
 
 @app.route("/api/meeting/outcome", methods=["POST"])

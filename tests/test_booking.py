@@ -228,3 +228,14 @@ def test_your_username_is_not_shown_without_a_booking_name(user, db, guest):
     set_hours(user, booking_name="")
     page = guest.get("/book/" + make_link(user, db)).get_data(as_text=True)
     assert "Book an appointment" in page and "sam" not in page.lower()
+
+
+def test_new_bookings_show_until_you_open_meetings(user, db, guest, told):
+    set_hours(user)
+    book(guest, make_link(user, db))
+    page = user.get("/dashboard").get_data(as_text=True)
+    assert 'title="New bookings">1<' in page
+    meetings = user.get("/meetings").get_data(as_text=True)
+    assert 'class="new-tag"' in meetings
+    page = user.get("/dashboard").get_data(as_text=True)
+    assert "New bookings" not in page
