@@ -1,10 +1,12 @@
 // Agi's guided tour, used on the dashboard and Settings.
 // AgiTour.start(steps, options) highlights one part of the page at a time.
-// A step is { title, text, target, optional, demo, finish }. target returns
-// an element, or a [first, last] pair to highlight both and what's between.
+// A step is { title, text, target, optional, counted, demo, finish, enter,
+// leave }. target returns an element, or a [first, last] pair to highlight
+// both and what's between. enter(ctx) can act things out on the page with a
+// pointer hand; leave() puts the page back.
 (function () {
   const tour = { steps: [], i: 0, spot: null, card: null, blocker: null,
-                 agi: null, opts: {} };
+                 agi: null, hand: null, opts: {}, run: 0, entered: null };
 
   // Agi, the Agenndar guide: a little planner page with binder rings.
   function agiSvg(extraClass) {
@@ -148,12 +150,79 @@
     return '';
   }
 
+  // A pointer hand that moves around the page like someone using it.
+  function handAt(x, y) {
+    const h = tour.hand;
+    h.style.left = x + 'px';
+    h.style.top = y + 'px';
+  }
+
+  function centreOf(el) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  function makeCtx(run) {
+    const alive = () => tour.run === run && !!tour.card;
+    const ctx = {
+      alive,
+      wait: ms => new Promise(res => setTimeout(() => res(alive()), ms)),
+      place: () => place(),
+      // Move the hand to an element or a {x, y} point.
+      async moveTo(to, ms) {
+        if (!alive()) return false;
+        const p = to && to.getBoundingClientRect ? centreOf(to) : to;
+        const h = tour.hand;
+        if (!h.classList.contains('on')) {
+          h.style.transition = 'none';
+          handAt(p.x + 40, p.y + 60);
+          void h.offsetWidth;
+          h.classList.add('on');
+        }
+        h.style.transition = 'left ' + (ms || 600) + 'ms cubic-bezier(.4,0,.2,1), '
+          + 'top ' + (ms || 600) + 'ms cubic-bezier(.4,0,.2,1), opacity 0.2s';
+        handAt(p.x, p.y);
+        return ctx.wait((ms || 600) + 40);
+      },
+      async tap() {
+        if (!alive()) return false;
+        tour.hand.classList.remove('tap');
+        void tour.hand.offsetWidth;
+        tour.hand.classList.add('tap');
+        return ctx.wait(260);
+      },
+      press(down) { if (alive()) tour.hand.classList.toggle('down', !!down); },
+      hideHand() { if (tour.hand) tour.hand.classList.remove('on', 'down'); }
+    };
+    return ctx;
+  }
+
+  function leaveStep() {
+    tour.run++;
+    if (tour.hand) tour.hand.classList.remove('on', 'down', 'tap');
+    const s = tour.entered;
+    tour.entered = null;
+    if (s && s.leave) {
+      try { s.leave(); } catch (e) {}
+    }
+  }
+
+  function enterStep(step) {
+    if (!step.enter) return;
+    tour.entered = step;
+    try {
+      const r = step.enter(makeCtx(tour.run));
+      if (r && r.catch) r.catch(() => {});
+    } catch (e) {}
+  }
+
   function targetOf(step) {
     const el = step && step.target ? step.target() : null;
     return visible(el) ? el : null;
   }
 
   function showStep(i) {
+    leaveStep();
     // Skip steps whose part of the page isn't showing.
     const dir = i >= tour.i ? 1 : -1;
     while (i > 0 && i < tour.steps.length - 1 && tour.steps[i].target
@@ -163,7 +232,7 @@
     tour.i = i;
     const step = tour.steps[i];
     const shown = tour.steps.filter((s, k) =>
-      !s.target || s.optional || k === i || targetOf(s));
+      !s.target || s.optional || s.counted || k === i || targetOf(s));
     const pos = shown.indexOf(step);
     const last = i === tour.steps.length - 1;
     const o = tour.opts;
@@ -202,6 +271,7 @@
         });
       }
     }
+    enterStep(step);
     place();
     setTimeout(place, 400);
     tour.card.querySelector('.tour-btn.primary').focus({ preventScroll: true });
@@ -265,8 +335,10 @@
   }
 
   function closeParts() {
-    [tour.spot, tour.card, tour.blocker, tour.agi].forEach(n => n && n.remove());
-    tour.spot = tour.card = tour.blocker = tour.agi = null;
+    leaveStep();
+    [tour.spot, tour.card, tour.blocker, tour.agi, tour.hand]
+      .forEach(n => n && n.remove());
+    tour.spot = tour.card = tour.blocker = tour.agi = tour.hand = null;
     window.removeEventListener('resize', place);
     window.removeEventListener('scroll', place, true);
     document.removeEventListener('keydown', keys);
@@ -288,12 +360,17 @@
     tour.agi = document.createElement('div');
     tour.agi.className = 'tour-agi';
     tour.agi.innerHTML = agiSvg();
-    document.body.append(tour.blocker, tour.spot, tour.card, tour.agi);
+    tour.hand = document.createElement('div');
+    tour.hand.className = 'tour-hand';
+    tour.hand.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+      + '<path d="M5 2.5 L5 19 L9.2 15.2 L12 21.5 L14.8 20.3 L12.1 14.1'
+      + ' L18 14.1 Z"/></svg><i></i>';
+    document.body.append(tour.blocker, tour.spot, tour.card, tour.agi, tour.hand);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     document.addEventListener('keydown', keys);
     showStep(0);
   }
 
-  window.AgiTour = { start, visible, agiSvg };
+  window.AgiTour = { start, visible, agiSvg, place: () => place() };
 })();

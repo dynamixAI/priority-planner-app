@@ -6,8 +6,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=2">
-  <script src="{{ url_for('static', filename='tour.js') }}?v=2"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=3">
+  <script src="{{ url_for('static', filename='tour.js') }}?v=3"></script>
   <meta name="theme-color" content="#eef2f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0d1617" media="(prefers-color-scheme: dark)">
   <title>Agenndar</title>
@@ -2968,18 +2968,78 @@
 
     // ---- First-run guided tour ----
     // Runs once per account (the server remembers), and can be replayed from
-    // the menu. The tour itself is in static/tour.js.
+    // the menu. The tour itself is in static/tour.js; the steps below act
+    // things out on the real page and put it back afterwards.
     function tourAddTarget() {
-      if (isMobileView()) return document.getElementById('fabAddTask');
+      if (isMobileView()) {
+        return document.body.classList.contains('sheet-open')
+          ? document.getElementById('taskSidebar')
+          : document.getElementById('fabAddTask');
+      }
       const side = document.getElementById('taskSidebar');
       return side.classList.contains('collapsed')
         ? document.getElementById('btnHamburger') : side;
     }
 
-    function tourSidebarPart(selector) {
-      const side = document.getElementById('taskSidebar');
-      if (isMobileView() || side.classList.contains('collapsed')) return null;
-      return side.querySelector(selector);
+    function tourSidebarOpen() {
+      return isMobileView()
+        ? document.body.classList.contains('sheet-open')
+        : !document.getElementById('taskSidebar').classList.contains('collapsed');
+    }
+
+    function tourKindTarget() {
+      if (!tourSidebarOpen()) return null;
+      const sw = document.querySelector('.kind-switch');
+      const meeting = document.getElementById('meetingTypeGroup');
+      const end = meeting.style.display === 'none'
+        ? document.getElementById('priorityGroup') : meeting;
+      return [sw.closest('.form-group'), end];
+    }
+
+    function tourSetKind(kind) {
+      const box = document.querySelector('input[name="entryKind"][value="' + kind + '"]');
+      if (box && !box.checked) {
+        box.checked = true;
+        setEntryKind();
+      }
+    }
+
+    // A pretend task card on the timetable. Never saved.
+    function tourGhost(track, hour) {
+      const prio = allPriorities[0] || {};
+      const holder = document.createElement('div');
+      holder.innerHTML = buildTaskCardHtml({
+        id: -1, title: 'Write report', detail: '', location: '',
+        date: track.dataset.date, time: String(hour).padStart(2, '0') + ':00',
+        duration: '1 hour', duration_minutes: 60, priority_id: prio.id,
+        status: 'pending' }, null).trim();
+      const card = holder.firstElementChild;
+      card.classList.add('tour-ghost');
+      card.removeAttribute('onclick');
+      card.removeAttribute('data-drag');
+      track.appendChild(card);
+      return card;
+    }
+
+    function tourRemoveGhosts() {
+      document.querySelectorAll('.tour-ghost').forEach(c => c.remove());
+    }
+
+    // Where the pretend card starts and where it gets dragged to.
+    function tourGhostPlan() {
+      const tracks = [...document.querySelectorAll('.day-track, .day-track-h')];
+      if (!tracks.length) return null;
+      const across = tracks[0].classList.contains('day-track-h');
+      const px = across ? HOUR_PX_H : HOUR_PX_V;
+      const grid = document.getElementById('gridContainer').getBoundingClientRect();
+      const t = tracks[0].getBoundingClientRect();
+      const seen = across ? Math.max(t.left, grid.left) - t.left
+                          : Math.max(t.top, grid.top, 90) - t.top;
+      const hour = Math.min(21, hourRangeMin + Math.ceil(seen / px) + 1);
+      const from = Math.min(1, tracks.length - 1);
+      const to = Math.min(from + 2, tracks.length - 1);
+      return { from: tracks[from], to: tracks[to], hour,
+               toHour: Math.min(22, from === to ? hour + 2 : hour + 1) };
     }
 
     function buildTourSteps() {
@@ -2993,27 +3053,106 @@
         { target: tourAddTarget, title: 'Add a task',
           text: phone
             ? 'Tap + to add a task: pick the day, start time, how long it takes '
-              + 'and how important it is. Switch to Meeting for calls and '
-              + 'appointments.'
+              + 'and how important it is.'
             : 'Add tasks here: pick the day, start time, how long it takes and how '
-              + 'important it is.' },
-        { target: () => tourSidebarPart('.kind-switch'),
-          title: 'Task or meeting?', demo: 'meeting',
+              + 'important it is.',
+          enter: async (ctx) => {
+            if (tourSidebarOpen()) return;
+            if (!await ctx.wait(500)) return;
+            const btn = phone ? document.getElementById('fabAddTask')
+                              : document.getElementById('btnHamburger');
+            await ctx.moveTo(btn, 700);
+            await ctx.tap();
+            if (!ctx.alive()) return;
+            toggleSidebar(true);
+            ctx.hideHand();
+            await ctx.wait(380);
+            ctx.place();
+          } },
+        // Counted from the start: the step before opens the form it needs.
+        { target: tourKindTarget, counted: true, title: 'Task or meeting?',
           text: 'Switch to Meeting for calls, appointments and anything with other '
-            + 'people. Meetings show in purple and never affect your score.' },
+            + 'people. Meetings show in purple and never affect your score.',
+          enter: async (ctx) => {
+            const labels = document.querySelectorAll('.kind-switch label');
+            if (!await ctx.wait(500)) return;
+            while (ctx.alive()) {
+              await ctx.moveTo(labels[1], 700);
+              await ctx.tap();
+              if (!ctx.alive()) return;
+              tourSetKind('meeting');
+              ctx.place();
+              if (!await ctx.wait(2000)) return;
+              await ctx.moveTo(labels[0], 600);
+              await ctx.tap();
+              if (!ctx.alive()) return;
+              tourSetKind('task');
+              ctx.place();
+              if (!await ctx.wait(1600)) return;
+            }
+          },
+          leave: () => tourSetKind('task') },
         { target: () => document.querySelector('.legend-bar'),
           title: 'Colour = priority',
           text: 'Every task is coloured by its priority, and meetings are purple. '
             + 'You can rename priorities and change their colours in Settings.' },
         { target: () => document.getElementById('gridContainer'), title: 'Your week',
           text: 'Tasks sit here at their time. Tap one to see its details, mark it '
-            + 'done, or change it.' },
+            + 'done, or change it.',
+          enter: async (ctx) => {
+            if (phone) toggleSidebar(false);
+            if (!await ctx.wait(600)) return;
+            const plan = tourGhostPlan();
+            if (!plan) return;
+            const card = tourGhost(plan.from, plan.hour);
+            await ctx.wait(500);
+            await ctx.moveTo(card, 800);
+            await ctx.tap();
+          },
+          leave: tourRemoveGhosts },
         { target: () => document.getElementById('gridContainer'),
-          title: 'Plans changed? Move it', demo: 'drag',
+          title: 'Plans changed? Move it',
           text: phone
             ? 'Press and hold a task until it lifts, then drop it on a new time or '
               + 'on a day in the bar that appears.'
-            : 'Drag a task to another day or time, then confirm the new slot.' },
+            : 'Drag a task to another day or time, then confirm the new slot.',
+          enter: async (ctx) => {
+            if (!await ctx.wait(500)) return;
+            const plan = tourGhostPlan();
+            if (!plan) return;
+            const card = tourGhost(plan.from, plan.hour);
+            // Measure where it would land, then slide it there.
+            const probe = tourGhost(plan.to, plan.toHour);
+            probe.style.visibility = 'hidden';
+            const a = card.getBoundingClientRect(), b = probe.getBoundingClientRect();
+            probe.remove();
+            const dx = b.left - a.left, dy = b.top - a.top;
+            while (ctx.alive()) {
+              card.style.transition = 'opacity 0.3s';
+              card.style.opacity = '1';
+              await ctx.moveTo(card, 800);
+              ctx.press(true);
+              card.classList.add('lifted');
+              if (!await ctx.wait(350)) return;
+              const start = card.getBoundingClientRect();
+              card.style.transition = 'transform 1s cubic-bezier(.4,0,.2,1)';
+              card.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(-1.5deg)';
+              await ctx.moveTo({ x: start.left + start.width / 2 + dx,
+                                 y: start.top + start.height / 2 + dy }, 1000);
+              ctx.press(false);
+              card.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+              card.classList.remove('lifted');
+              if (!await ctx.wait(1400)) return;
+              ctx.hideHand();
+              card.style.transition = 'opacity 0.3s';
+              card.style.opacity = '0';
+              if (!await ctx.wait(350)) return;
+              card.style.transition = 'none';
+              card.style.transform = '';
+              if (!await ctx.wait(300)) return;
+            }
+          },
+          leave: tourRemoveGhosts },
         phone
           ? { target: () => document.getElementById('dayStrip'), title: 'Change day',
               text: 'Tap a day here, or swipe left and right on the timetable.' }
@@ -3032,18 +3171,72 @@
         { target: () => document.querySelector('.metrics-bar'), title: 'Your counts',
           text: 'Tap Done, Undone, Pushed or Missed to see exactly which tasks '
             + 'are in each.' },
-        { target: () => document.querySelector('.meetings-btn'),
+        { target: () => {
+            const btn = document.querySelector('.meetings-btn');
+            const peek = document.querySelector('.tour-peek');
+            return peek ? [btn, peek] : btn;
+          },
           title: 'Your meetings',
           text: 'See what’s coming up and mark whether each meeting happened. '
-            + 'A red badge means someone booked or cancelled.' },
+            + 'A red badge means someone booked or cancelled.',
+          enter: async (ctx) => {
+            const btn = document.querySelector('.meetings-btn');
+            if (!await ctx.wait(400)) return;
+            await ctx.moveTo(btn, 700);
+            await ctx.tap();
+            if (!ctx.alive()) return;
+            const r = btn.getBoundingClientRect();
+            const peek = document.createElement('div');
+            peek.className = 'tour-peek';
+            peek.style.top = (r.bottom + 10) + 'px';
+            peek.style.left = Math.max(16, r.right - 290) + 'px';
+            peek.innerHTML = '<h4>Meetings</h4><h5>Coming up</h5>'
+              + '<div class="row"><span>📞</span><div><b>Call with Ada</b>'
+              + '<small>Thu, 14:00 to 14:30</small></div>'
+              + '<span class="new">New</span></div>'
+              + '<h5>How did it go?</h5>'
+              + '<div class="row"><span>👥</span><div><b>Catch-up with Sam</b>'
+              + '<small>Yesterday, 11:00</small></div></div>'
+              + '<div class="answers"><b style="background:#1f9d55">Happened</b>'
+              + '<b style="background:#e5484d">I missed it</b>'
+              + '<b style="background:#d97706">No-show</b></div>';
+            document.body.appendChild(peek);
+            ctx.place();
+            if (!await ctx.wait(700)) return;
+            await ctx.moveTo(peek.querySelector('.answers b'), 800);
+            await ctx.tap();
+          },
+          leave: () => document.querySelectorAll('.tour-peek').forEach(p => p.remove()) },
         { title: 'Let people book you', demo: 'slots',
           text: 'Share your booking link and people pick a time when you’re free. '
             + 'It lands on your timetable and you get a notification. Set it up '
             + 'in Settings.' },
-        { target: () => document.getElementById('profileHub'), title: 'Your menu',
+        { target: () => {
+            const hub = document.getElementById('profileHub');
+            const drop = document.getElementById('profileDropdown');
+            return drop.classList.contains('open') ? [hub, drop] : hub;
+          },
+          title: 'Your menu',
           text: 'Turn on reminders (a nudge 15 minutes before each task), dark '
             + 'mode, install Agenndar on your phone, export, '
-            + (phone ? 'Meetings, ' : '') + 'and Settings.' },
+            + (phone ? 'Meetings, ' : '') + 'and Settings.',
+          enter: async (ctx) => {
+            const drop = document.getElementById('profileDropdown');
+            if (!await ctx.wait(400)) return;
+            await ctx.moveTo(document.querySelector('#profileHub .avatar-badge'), 700);
+            await ctx.tap();
+            if (!ctx.alive()) return;
+            drop.classList.add('open');
+            updateThemeDropText();
+            ctx.place();
+            if (!await ctx.wait(500)) return;
+            for (const item of drop.querySelectorAll('.dropdown-item')) {
+              if (!AgiTour.visible(item)) continue;
+              if (!await ctx.moveTo(item, 450)) return;
+              if (!await ctx.wait(250)) return;
+            }
+          },
+          leave: () => document.getElementById('profileDropdown').classList.remove('open') },
         { title: "You're all set",
           text: 'Add your first task to get going, or take a quick look around '
             + 'Settings. You can replay this tour any time from the menu.',
@@ -3066,6 +3259,7 @@
           }).catch(() => {}).finally(() => {
             if (how === 'alt') location.href = '/settings?tour=1';
           });
+          if (how !== 'finish' && isMobileView()) toggleSidebar(false);
           if (how === 'finish') {
             toggleSidebar(true);
             setTimeout(() => document.getElementById('inputTitle').focus(), 350);

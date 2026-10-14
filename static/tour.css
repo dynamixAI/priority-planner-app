@@ -370,3 +370,106 @@
 }
 .tour-agi .agi { width: 100%; height: 100%; }
 .tour-agi.flip .agi { transform: scaleX(-1); }
+/* The pointer hand that acts out each step */
+.tour-hand {
+  position: fixed;
+  z-index: 4003;
+  width: 26px;
+  height: 26px;
+  margin: -3px 0 0 -6px;
+  pointer-events: none;
+  opacity: 0;
+}
+.tour-hand.on { opacity: 1; }
+.tour-hand svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+  transition: transform 0.15s;
+  transform-origin: 6px 3px;
+}
+.tour-hand path {
+  fill: #fff;
+  stroke: #13201f;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.tour-hand.down svg { transform: scale(0.86); }
+.tour-hand i {
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 0;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  opacity: 0;
+}
+.tour-hand.tap i { animation: tourTap 0.45s ease-out; }
+@keyframes tourTap {
+  from { opacity: 0.9; transform: scale(0.4); }
+  to { opacity: 0; transform: scale(2.6); }
+}
+/* A pretend task card the tour drags around */
+.tour-ghost {
+  z-index: 5;
+  box-shadow: 0 0 0 2px var(--primary);
+}
+.tour-ghost.lifted {
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28), 0 0 0 2px var(--primary);
+}
+/* A quick look at the Meetings page */
+.tour-peek {
+  position: fixed;
+  z-index: 3998;
+  width: 290px;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  font-size: 0.8rem;
+  animation: tourIn 0.3s ease both;
+}
+.tour-peek h4 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.tour-peek h5 {
+  margin: 0.6rem 0 0.35rem;
+  font-size: 0.72rem;
+  color: var(--metric-muted, var(--subtext));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tour-peek .row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid #7c5cd6;
+  border-radius: 9px;
+}
+.tour-peek .row small { display: block; color: var(--metric-muted, var(--subtext)); }
+.tour-peek .new {
+  margin-left: auto;
+  padding: 0 0.4rem;
+  border-radius: 99px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+.tour-peek .answers { display: flex; gap: 0.3rem; margin-top: 0.4rem; }
+.tour-peek .answers b {
+  flex: 1;
+  text-align: center;
+  padding: 0.3rem 0;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 0.68rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-hand { transition: none !important; }
+}
