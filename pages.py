@@ -126,7 +126,8 @@ def dashboard():
         "AND meeting_type IS NOT NULL AND (date < ? OR (date = ? AND time <= ?))"),
         (user_id, today_str, today_str, now_dt.strftime("%H:%M"))) or {}).get("n") or 0
     new_bookings = (fetch_one(conn, (
-        "SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND status = 'pending' "
+        "SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? "
+        "AND status IN ('pending', 'cancelled') "
         "AND meeting_type IS NOT NULL AND booking_seen = 0"),
         (user_id,)) or {}).get("n") or 0
 

@@ -1089,12 +1089,12 @@
       font-size: 0.85rem; font-weight: 600; color: var(--text); cursor: pointer;
     }
     .notify-check input { width: 17px; height: 17px; accent-color: #7c5cd6; }
-    #notifyMessage {
+    #notifyMessage, #cancelMessage {
       width: 100%; padding: 0.6rem 0.7rem; border-radius: 10px; resize: vertical;
       border: 1px solid var(--border); background: var(--card-bg);
       color: var(--text); font: inherit; font-size: 0.85rem;
     }
-    #notifyMessage:disabled { opacity: 0.5; }
+    #notifyMessage:disabled, #cancelMessage:disabled { opacity: 0.5; }
     .notify-hint { font-size: 0.74rem; color: var(--metric-muted); margin-top: 0.35rem; }
     .nav-badge {
       position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px;
@@ -1102,6 +1102,16 @@
       font-size: 0.68rem; font-weight: 700; line-height: 18px; text-align: center;
     }
     .nav-badge.new { background: #e5484d; }
+    .task-card.meeting.cancelled {
+      opacity: 0.6; background: transparent;
+      border: 1.5px dashed #e5484d; border-left: 3px solid #e5484d;
+    }
+    .task-card.cancelled .card-title { text-decoration: line-through; }
+    .detail-note {
+      font-size: 0.85rem; line-height: 1.4; color: var(--text);
+      background: var(--table-header); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.55rem 0.7rem; margin-bottom: 0.6rem;
+    }
     .avatar-badge { position: relative; }
     .avatar-dot {
       position: absolute; top: -2px; right: -2px; width: 11px; height: 11px;
@@ -2068,6 +2078,36 @@
   </div>
 
   <!-- Modal 4: Custom In-App Reschedule Modal -->
+  <div class="modal-overlay" id="cancelMeetingModal" style="z-index: 1001;">
+    <div class="modal-content" style="width: 440px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #ef4444;">
+          Cancel this meeting?</h3>
+        <button class="modal-close-btn" onclick="closeCancelMeetingModal()" title="Close">✕</button>
+      </div>
+      <p id="cancelMeetingSubtitle" style="font-size: 0.8rem; color: var(--metric-muted); margin-top: -0.5rem; margin-bottom: 1rem; line-height: 1.4;"></p>
+      <input type="hidden" id="cancelMeetingId">
+      <div class="form-group notify-box">
+        <label class="notify-check">
+          <input type="checkbox" id="cancelNotify" checked
+                 onchange="document.getElementById('cancelMessage').disabled = !this.checked">
+          <span>Email <span id="cancelName">them</span> that it's cancelled</span>
+        </label>
+        <textarea id="cancelMessage" rows="3" maxlength="600"></textarea>
+        <div class="notify-hint">Edit the message or write your own. Replies come
+          to your email.</div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+        <button type="button" class="btn-create" style="background: transparent; border: 1px solid var(--border); color: var(--text);" onclick="closeCancelMeetingModal()">
+          Keep it
+        </button>
+        <button type="button" class="btn-create" style="background: #ef4444;" onclick="submitCancelMeeting()">
+          Cancel meeting
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="rescheduleModal" style="z-index: 1001;">
     <div class="modal-content" style="width: 440px;">
       <div class="modal-header">
@@ -2386,6 +2426,7 @@
         task.status === 'rescheduled' ? 'rescheduled' : '',
         task.status === 'replanned' ? 'replanned' : '',
         task.status === 'missed' ? 'missed' : '',
+        task.status === 'cancelled' ? 'cancelled' : '',
         task.meeting_type ? 'meeting' : '',
         textColor === '#0f172a' ? 'dark-text' : ''
       ].join(' ').trim();
@@ -3853,16 +3894,21 @@
       const endLabel = minutesToTimeStr(taskRangeMinutes(task).end);
 
       let detailActionsHtml = '';
-      if (task.meeting_type && task.status !== 'rescheduled' && task.status !== 'replanned') {
+      if (task.status === 'cancelled') {
+        detailActionsHtml = `
+          <div class="detail-note">${escapeHtml(task.booked_by || 'They')} cancelled this. The time is free again.</div>
+          <button class="btn-create" style="background:#ef4444;" onclick="closeDetailModal(); deleteTask(${task.id})">Remove from planner</button>
+        `;
+      } else if (task.meeting_type && task.status !== 'rescheduled' && task.status !== 'replanned') {
         detailActionsHtml = meetingActionsHtml(task);
       } else if (task.status === 'rescheduled') {
         detailActionsHtml = `
-          <div class="detail-row"><span class="locked-label">Rescheduled — already moved to a new time</span></div>
+          <div class="detail-note">Rescheduled. It's already been moved to a new time.</div>
           <button class="btn-create" style="background:#ef4444;" onclick="closeDetailModal(); deleteTask(${task.id})">Delete Task</button>
         `;
       } else if (task.status === 'replanned') {
         detailActionsHtml = `
-          <div class="detail-row"><span class="locked-label" style="color:#0284c7;">Replanned — already moved to a new time</span></div>
+          <div class="detail-note">${task.meeting_type ? 'Moved' : 'Replanned'}. It's already been moved to a new time.</div>
           <button class="btn-create" style="background:#ef4444;" onclick="closeDetailModal(); deleteTask(${task.id})">Delete Task</button>
         `;
       } else if (task.status === 'missed') {
@@ -3930,7 +3976,8 @@
           ${task.meeting_type
             ? `<div>${MEETING_ICONS[task.meeting_type] || ''} ${MEETING_LABELS[task.meeting_type] || 'Meeting'}: ${
                 task.meeting_outcome ? MEETING_OUTCOMES[task.meeting_outcome]
-                : (task.status === 'pending' ? 'not answered yet' : task.status)}.
+                : ({ pending: 'not answered yet', replanned: 'moved',
+                     cancelled: 'cancelled by them' }[task.status] || task.status)}.
                 Meetings don't affect your Behaviour Index.</div>`
             : `<div style="text-transform: capitalize;">${task.status}</div>`}
         </div>
@@ -4382,7 +4429,53 @@
       }
     }
 
+    function openCancelMeetingModal(task) {
+      document.getElementById('cancelMeetingId').value = task.id;
+      document.getElementById('cancelMeetingSubtitle').textContent =
+        `${task.title}, ${friendlyDate(task.date)} at ${fmtTime(task.time)}.`;
+      document.getElementById('cancelName').textContent =
+        (task.booked_by || 'them').split(' ')[0];
+      document.getElementById('cancelNotify').checked = true;
+      const msg = document.getElementById('cancelMessage');
+      msg.disabled = false;
+      msg.value = "Sorry, I have to cancel our meeting. "
+        + "Please book another time if you'd still like to meet.";
+      document.getElementById('cancelMeetingModal').style.display = 'flex';
+    }
+
+    function closeCancelMeetingModal() {
+      document.getElementById('cancelMeetingModal').style.display = 'none';
+    }
+
+    async function submitCancelMeeting() {
+      const taskId = parseInt(document.getElementById('cancelMeetingId').value, 10);
+      const notify = document.getElementById('cancelNotify').checked;
+      const message = document.getElementById('cancelMessage').value.trim();
+      closeCancelMeetingModal();
+      const res = await fetch('/api/task/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ task_id: taskId, notify, message })
+      });
+      if (!res.ok) {
+        await appAlert("That didn't work. Please try again.");
+        return;
+      }
+      const result = await res.json();
+      showToast(result.emailed ? "Meeting cancelled. We've let them know."
+                               : "Meeting cancelled.", 4000);
+      await refreshMetricsAndTasks();
+    }
+
     async function deleteTask(taskId) {
+      const task = allUserTasks.find(t => t.id === taskId);
+      const guestEmail = task && (task.booked_email
+        || ((task.detail || '').match(/^Email: (\S+@\S+)$/m) || [])[1]);
+      if (task && task.meeting_type && task.status === 'pending'
+          && task.booking_ref && guestEmail) {
+        openCancelMeetingModal(task);
+        return;
+      }
       const confirmed = await appConfirm("Delete this scheduled task?", "Delete", "Cancel");
       if (confirmed) {
         const res = await fetch('/api/task/delete', {

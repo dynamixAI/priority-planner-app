@@ -322,6 +322,8 @@ def delete_task():
     data = request.get_json()
     task_id = data.get("task_id")
     conn = get_db()
+    task = fetch_one(conn, "SELECT * FROM tasks WHERE id = ? AND user_id = ?",
+                     (task_id, session["user_id"]))
 
     # A task can be the origin that other rows in its reschedule chain point
     # back to. Deleting it while descendants still reference it violates the
@@ -334,7 +336,12 @@ def delete_task():
     )
     conn.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, session["user_id"]))
     conn.commit()
-    return jsonify({"status": "success"})
+    emailed = False
+    if task and task.get("meeting_type") and task["status"] == "pending" \
+            and data.get("notify"):
+        emailed = booking.email_guest_about_cancel(
+            conn, task, clean_text(data.get("message"), 600))
+    return jsonify({"status": "success", "emailed": emailed})
 
 
 @app.route("/api/task/detail", methods=["POST"])

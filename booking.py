@@ -472,6 +472,30 @@ def email_guest_about_move(conn, task, new_date, new_time, note):
     return True
 
 
+def email_guest_about_cancel(conn, task, note):
+    """Emails the person who booked a meeting that it's off."""
+    to = guest_email(task)
+    if not to or not task.get("booking_ref"):
+        return False
+    settings = booking_settings(conn, task["user_id"])
+    label = MEETING_TYPES.get(task.get("meeting_type"), "Meeting")
+    lines = ["Hi %s," % (task.get("booked_by") or "there"), ""]
+    if note:
+        lines += [note, ""]
+    lines.append("Your %s%s on %s has been cancelled." % (
+        label.lower(), with_name(settings),
+        when_text(settings, task["date"], task["time"])))
+    link = fetch_one(conn, "SELECT token FROM booking_links WHERE user_id = ? "
+                           "AND kind = 'public' AND active = 1", (task["user_id"],))
+    if link:
+        lines += ["", "You can book a new time here: "
+                  + full_url("book", token=link["token"])]
+    lines += ["", "You can reply to this email to get in touch."]
+    _email_later(to, "Cancelled: %s%s" % (label, with_name(settings)),
+                 "\n".join(lines), reply_to=settings["email"])
+    return True
+
+
 @app.route("/booking/<ref>/cancel", methods=["GET", "POST"])
 def cancel_booking(ref):
     conn = get_db()
@@ -481,19 +505,33 @@ def cancel_booking(ref):
     settings = booking_settings(conn, task["user_id"])
     when = "%s at %s" % (nice_date(task["date"]),
                          format_time(task["time"], settings["time_format"]))
+    if task["status"] == "cancelled":
+        return render_template(
+            "book_message.html", heading="Booking cancelled",
+            message="This booking has already been cancelled.")
     if task["status"] != "pending":
         return render_template(
             "book_message.html", heading="This booking can't be cancelled here",
             message="It has already been moved or finished. Please reply to "
                     "your confirmation email instead.")
     if request.method == "POST":
-        conn.execute("UPDATE tasks SET origin_id = NULL WHERE origin_id = ?",
-                     (task["id"],))
-        conn.execute("DELETE FROM tasks WHERE id = ?", (task["id"],))
+        if task.get("meeting_type"):
+            # kept on the calendar so the owner can see what happened
+            conn.execute("UPDATE tasks SET status = 'cancelled', booking_seen = 0 "
+                         "WHERE id = ?", (task["id"],))
+        else:
+            conn.execute("UPDATE tasks SET origin_id = NULL WHERE origin_id = ?",
+                         (task["id"],))
+            conn.execute("DELETE FROM tasks WHERE id = ?", (task["id"],))
         conn.commit()
+        who = task["booked_by"] or "Someone"
         _notify_owner_later(task["user_id"], "Booking cancelled",
-                            "%s cancelled %s" % (task["booked_by"] or "Someone",
-                                                 when))
+                            "%s cancelled %s" % (who, when))
+        if settings["email"]:
+            _email_later(settings["email"], "Cancelled: " + task["title"],
+                         "%s cancelled %s, %s.\n\nThat time is free again." % (
+                             who, task["title"], when_text(
+                                 settings, task["date"], task["time"])))
         return render_template(
             "book_message.html", heading="Booking cancelled",
             message="Your booking for %s has been cancelled." % when)
@@ -521,7 +559,12 @@ def meetings():
     open_ones = fetch_all(conn, (
         "SELECT * FROM tasks WHERE user_id = ? AND meeting_type IS NOT NULL "
         "AND status = 'pending' ORDER BY date ASC, time ASC"), (user_id,))
-    new_ids = [t["id"] for t in open_ones if t.get("booking_seen") == 0]
+    cancelled = fetch_all(conn, (
+        "SELECT * FROM tasks WHERE user_id = ? AND meeting_type IS NOT NULL "
+        "AND status = 'cancelled' AND date >= ? ORDER BY date ASC, time ASC"),
+        (user_id, now.strftime("%Y-%m-%d")))
+    new_ids = [t["id"] for t in open_ones + cancelled
+               if t.get("booking_seen") == 0]
     if new_ids:
         conn.execute("UPDATE tasks SET booking_seen = 1 WHERE user_id = ? "
                      "AND booking_seen = 0", (user_id,))
@@ -555,7 +598,7 @@ def meetings():
         "meetings.html", theme=user.get("theme") or "light", waiting=waiting,
         upcoming=upcoming, earlier=earlier, record=record, outcomes=OUTCOMES,
         types=MEETING_TYPES, when=when, has_link=bool(has_link),
-        new_ids=new_ids)
+        new_ids=new_ids, cancelled=cancelled)
 
 
 @app.route("/api/meeting/outcome", methods=["POST"])

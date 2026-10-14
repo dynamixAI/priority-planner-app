@@ -166,8 +166,11 @@ def test_the_guest_can_cancel_from_their_email(user, db, guest, told):
     assert "Cancel this booking?" in guest.get(
         "/booking/%s/cancel" % ref).get_data(as_text=True)
     guest.post("/booking/%s/cancel" % ref)
-    assert booked(db) == []
+    assert [row[4] for row in booked(db)] == ["cancelled"]
     assert told["push"][-1].startswith("Ada Lovelace cancelled")
+    # the time is free again
+    assert book(guest, token).status_code == 200
+    assert [row[4] for row in booked(db)] == ["cancelled", "pending"]
 
 
 def test_spam_robots_are_quietly_ignored(user, db, guest, told):
@@ -239,3 +242,32 @@ def test_new_bookings_show_until_you_open_meetings(user, db, guest, told):
     assert 'class="new-tag"' in meetings
     page = user.get("/dashboard").get_data(as_text=True)
     assert "New bookings" not in page
+
+
+def test_guest_cancel_keeps_it_on_your_calendar(user, db, guest, told):
+    set_hours(user)
+    book(guest, make_link(user, db))
+    ref = db.execute("SELECT booking_ref FROM tasks").fetchone()[0]
+    user.get("/meetings")
+    guest.post("/booking/%s/cancel" % ref)
+    status, seen = db.execute("SELECT status, booking_seen FROM tasks").fetchone()
+    assert (status, seen) == ("cancelled", 0)
+    assert any("Ada" in body and "cancelled" in body for _, body in told["email"])
+    assert 'title="New bookings">1<' in user.get("/dashboard").get_data(as_text=True)
+    page = user.get("/meetings").get_data(as_text=True)
+    assert "Cancelled by them" in page
+    again = guest.get("/booking/%s/cancel" % ref).get_data(as_text=True)
+    assert "already been cancelled" in again
+
+
+def test_deleting_a_booking_can_email_the_guest(user, db, guest, told):
+    set_hours(user)
+    book(guest, make_link(user, db))
+    tid = db.execute("SELECT id FROM tasks").fetchone()[0]
+    r = user.post("/api/task/delete", json={
+        "task_id": tid, "notify": True, "message": "Sorry about this."})
+    assert r.get_json()["emailed"] is True
+    to, email = told["email"][-1]
+    assert to == "ada@example.com" and "Sorry about this." in email
+    assert "has been cancelled" in email and "/book/" in email
+    assert db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
