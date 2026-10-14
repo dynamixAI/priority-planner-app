@@ -96,7 +96,7 @@ def priority_setup():
 
         return redirect(url_for("dashboard"))
 
-    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation, time_format, timezone, has_password FROM users WHERE id = ?", (user_id,))
+    user = fetch_one(conn, "SELECT theme, week_start, active_days, overdue_threshold_days, grid_orientation, time_format, timezone, has_password, settings_tour_seen FROM users WHERE id = ?", (user_id,))
     priorities = fetch_all(
         conn, "SELECT * FROM priorities WHERE user_id = ? AND is_active = 1 ORDER BY sort_order ASC", (user_id,)
     )
@@ -113,7 +113,9 @@ def priority_setup():
         active_days=active_days, overdue_threshold_days=overdue_threshold_days,
         grid_orientation=grid_orientation, time_format=time_format,
         user_timezone=user_tz, timezones=VALID_TIMEZONES,
-        has_password=not user or user.get("has_password") != 0
+        has_password=not user or user.get("has_password") != 0,
+        show_tour=request.args.get("tour") == "1"
+        or bool(user) and not user.get("settings_tour_seen")
     )
 
 

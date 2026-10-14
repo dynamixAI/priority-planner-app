@@ -6,6 +6,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=2">
+  <script src="{{ url_for('static', filename='tour.js') }}?v=2"></script>
   <meta name="theme-color" content="#eef2f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0d1617" media="(prefers-color-scheme: dark)">
   <title>Agenndar</title>
@@ -1413,284 +1415,6 @@
       gap: 4px;
     }
     body.dragging-task .fab { display: none; }
-    /* ---- First-run guided tour ---- */
-    .tour-spot {
-      position: fixed;
-      z-index: 4000;
-      border-radius: 14px;
-      pointer-events: none;
-      box-shadow: 0 0 0 9999px rgba(6, 12, 13, 0.62);
-      transition-property: top, left, width, height;
-      transition-duration: 0.45s;
-      transition-timing-function: cubic-bezier(.2, .8, .2, 1);
-    }
-    .tour-spot::after {
-      content: "";
-      position: absolute;
-      inset: -4px;
-      border-radius: 17px;
-      border: 2px solid var(--primary);
-      animation: tourPulse 1.6s ease-out infinite;
-    }
-    .tour-spot.centered::after { display: none; }
-    @keyframes tourPulse {
-      0% { opacity: 0.9; transform: scale(1); }
-      100% { opacity: 0; transform: scale(1.06); }
-    }
-    .tour-blocker { position: fixed; inset: 0; z-index: 3999; }
-    .tour-card {
-      position: fixed;
-      z-index: 4001;
-      width: min(360px, calc(100vw - 32px));
-      background: var(--card-bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 1.1rem 1.15rem 0.95rem;
-      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
-      transition-property: top, left;
-      transition-duration: 0.45s;
-      transition-timing-function: cubic-bezier(.2, .8, .2, 1);
-    }
-    .tour-card.enter { animation: tourIn 0.35s ease both; }
-    @keyframes tourIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: none; }
-    }
-    .tour-step {
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: var(--primary);
-      margin-bottom: 0.25rem;
-    }
-    .tour-card h3 { margin: 0 0 0.35rem; font-size: 1.05rem; font-weight: 650; }
-    .tour-card p {
-      margin: 0;
-      font-size: 0.86rem;
-      line-height: 1.5;
-      color: var(--metric-muted);
-    }
-    .tour-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 0.95rem;
-    }
-    .tour-dots { display: flex; gap: 4px; margin-right: auto; }
-    .tour-dots i {
-      width: 6px;
-      height: 6px;
-      border-radius: 3px;
-      background: var(--border);
-      transition: width 0.3s;
-    }
-    .tour-dots i.on { width: 16px; background: var(--primary); }
-    .tour-btn {
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text);
-      font: inherit;
-      font-size: 0.82rem;
-      font-weight: 600;
-      padding: 0.5rem 0.8rem;
-      border-radius: 10px;
-      cursor: pointer;
-    }
-    .tour-btn.primary {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: #fff;
-    }
-    [data-theme="dark"] .tour-btn.primary { color: #062226; }
-    .tour-btn.link {
-      border: none;
-      padding: 0.5rem 0.3rem;
-      color: var(--metric-muted);
-      font-weight: 500;
-    }
-
-    /* Little animated demos inside the tour card */
-    .tour-demo {
-      position: relative;
-      height: 74px;
-      margin: 0.8rem 0 0.1rem;
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--primary) 7%, transparent);
-      overflow: hidden;
-    }
-    .demo-cols {
-      position: absolute;
-      inset: 8px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-    .demo-cols span { border-radius: 6px; border: 1px dashed var(--border); }
-    .demo-card {
-      position: absolute;
-      top: 16px;
-      left: 14px;
-      width: 26%;
-      height: 26px;
-      border-radius: 6px;
-      background: color-mix(in srgb, #3b82f6 22%, var(--card-bg));
-      border-left: 3px solid #3b82f6;
-      animation: demoDrag 3.2s ease-in-out infinite;
-    }
-    .demo-hand {
-      position: absolute;
-      top: 30px;
-      left: 40px;
-      font-size: 18px;
-      animation: demoDrag 3.2s ease-in-out infinite;
-    }
-    @keyframes demoDrag {
-      0%, 15% { transform: translate(0, 0); }
-      55%, 75% { transform: translate(calc(var(--demo-w, 260px) * 0.33), 18px); }
-      100% { transform: translate(0, 0); }
-    }
-    .demo-buttons {
-      display: flex;
-      gap: 6px;
-      justify-content: center;
-      align-items: center;
-      height: 100%;
-      flex-wrap: wrap;
-    }
-    .demo-buttons b {
-      font-size: 0.74rem;
-      font-weight: 600;
-      padding: 0.35rem 0.6rem;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--card-bg);
-      animation: demoLight 4s infinite;
-    }
-    .demo-buttons b:nth-child(2) { animation-delay: 1s; }
-    .demo-buttons b:nth-child(3) { animation-delay: 2s; }
-    .demo-buttons b:nth-child(4) { animation-delay: 3s; }
-    @keyframes demoLight {
-      0%, 22% {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
-      }
-      30%, 100% { border-color: var(--border); box-shadow: none; }
-    }
-    .demo-meter {
-      position: absolute;
-      left: 16px;
-      right: 16px;
-      top: 32px;
-      height: 8px;
-      border-radius: 4px;
-      background: linear-gradient(90deg, #e5484d 0 40%, #e0a10a 40% 70%,
-        #1a9a55 70% 100%);
-    }
-    .demo-meter i {
-      position: absolute;
-      top: -5px;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: var(--card-bg);
-      border: 3px solid var(--text);
-      animation: demoScore 4s ease-in-out infinite;
-    }
-    @keyframes demoScore {
-      0%, 10% { left: 20%; }
-      45%, 60% { left: 82%; }
-      100% { left: 20%; }
-    }
-    .demo-legend {
-      position: absolute;
-      bottom: 6px;
-      left: 0;
-      right: 0;
-      text-align: center;
-      font-size: 0.7rem;
-      color: var(--metric-muted);
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .tour-spot, .tour-card { transition: none; }
-      .tour-spot::after, .demo-card, .demo-hand, .demo-buttons b,
-      .demo-meter i, .tour-card.enter {
-        animation: none;
-      }
-    }
-    /* ---- Agi, the guide ---- */
-    .agi { overflow: visible; display: block; }
-    .agi-body { fill: #10a3b0; stroke: #13292b; stroke-width: 3; }
-    .agi-band { fill: #0b7a85; stroke: #13292b; stroke-width: 3; }
-    .agi-ring { fill: #e9eef0; stroke: #13292b; stroke-width: 3; }
-    .agi-face { fill: #ffffff; stroke: #13292b; stroke-width: 2.5; }
-    .agi-ink { fill: #13292b; }
-    .agi-foot { fill: #0b7a85; stroke: #13292b; stroke-width: 3; }
-    .agi-glint { fill: #ffffff; }
-    .agi-cheek { fill: #ff8fa3; opacity: 0.6; }
-    .agi-smile, .agi-limb {
-      fill: none;
-      stroke: #13292b;
-      stroke-width: 4.5;
-      stroke-linecap: round;
-    }
-    .agi-hand { fill: #10a3b0; stroke: #13292b; stroke-width: 3; }
-    .agi-shadow {
-      fill: #000;
-      opacity: 0.14;
-      animation: agiShadow 2.6s ease-in-out infinite;
-    }
-    [data-theme="dark"] .agi-shadow { fill: #33d1de; opacity: 0.12; }
-    [data-theme="dark"] .agi {
-      filter: drop-shadow(0 0 1.5px rgba(230, 239, 239, 0.35));
-    }
-    .agi-bob { animation: agiBob 2.6s ease-in-out infinite; }
-    .agi-eyes { animation: agiBlink 4.2s infinite; transform-origin: 60px 78px; }
-    .agi-arm-r {
-      transform-origin: 98px 76px;
-      transform: rotate(var(--agi-aim, -35deg));
-      transition: transform 0.5s cubic-bezier(.2, .8, .2, 1);
-    }
-    .agi-arm-l { transform-origin: 24px 76px; }
-    .agi.waving .agi-arm-r { animation: agiWave 1.8s ease-in-out infinite; }
-    .agi.pointing .agi-arm-r .agi-hand {
-      animation: agiPoke 1.2s ease-in-out infinite;
-    }
-    @keyframes agiBob {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-5px); }
-    }
-    @keyframes agiShadow {
-      0%, 100% { transform: scaleX(1); transform-origin: 60px 134px; }
-      50% { transform: scaleX(0.85); transform-origin: 60px 134px; }
-    }
-    @keyframes agiBlink {
-      0%, 90%, 100% { transform: scaleY(1); }
-      94% { transform: scaleY(0.1); }
-    }
-    @keyframes agiWave {
-      0%, 100% { transform: rotate(-60deg); }
-      50% { transform: rotate(-20deg); }
-    }
-    @keyframes agiPoke {
-      0%, 100% { transform: translateX(0); }
-      50% { transform: translateX(3px); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .agi-bob, .agi-shadow, .agi-eyes, .agi.waving .agi-arm-r,
-      .agi.pointing .agi-arm-r .agi-hand { animation: none; }
-    }
-    .tour-agi {
-      position: fixed;
-      z-index: 4002;
-      width: 84px;
-      height: 98px;
-      pointer-events: none;
-      transition-property: top, left;
-      transition-duration: 0.45s;
-      transition-timing-function: cubic-bezier(.2, .8, .2, 1);
-    }
-    .tour-agi .agi { width: 100%; height: 100%; }
-    .tour-agi.flip .agi { transform: scaleX(-1); }
   </style>
 </head>
 <body>
@@ -3243,112 +2967,8 @@
     });
 
     // ---- First-run guided tour ----
-    // Highlights the real parts of the screen one at a time. Runs once per
-    // account (the server remembers), and can be replayed from the menu.
-    const tour = { steps: [], i: 0, spot: null, card: null, blocker: null, agi: null };
-    // Agi, the Agenndar guide: a little planner page with binder rings.
-    // Original artwork, drawn here in SVG so it stays sharp and themeable.
-    function agiSvg(extraClass) {
-      return '<svg class="agi ' + (extraClass || '') + '" viewBox="0 0 120 140"'
-        + ' aria-hidden="true" focusable="false">'
-        + '<ellipse class="agi-shadow" cx="60" cy="134" rx="26" ry="4"/>'
-        + '<g class="agi-bob">'
-        // feet
-        + '<ellipse class="agi-foot" cx="45" cy="121" rx="10" ry="6"/>'
-        + '<ellipse class="agi-foot" cx="75" cy="121" rx="10" ry="6"/>'
-        // waving / resting arm (left)
-        + '<g class="agi-arm-l"><path class="agi-limb" d="M24 76 Q10 82 9 96"/>'
-        + '<circle class="agi-hand" cx="9" cy="97" r="6"/></g>'
-        // body, header band and binder rings
-        + '<rect class="agi-body" x="20" y="28" width="80" height="92" rx="24"/>'
-        + '<path class="agi-band" d="M20 52 V50 A22 22 0 0 1 42 28 H78 A22 22 0'
-        + ' 0 1 100 50 V52 Z"/>'
-        + '<rect class="agi-ring" x="36" y="16" width="9" height="22" rx="4.5"/>'
-        + '<rect class="agi-ring" x="75" y="16" width="9" height="22" rx="4.5"/>'
-        // face page
-        + '<rect class="agi-face" x="30" y="58" width="60" height="50" rx="15"/>'
-        + '<g class="agi-eyes">'
-        + '<ellipse class="agi-ink" cx="48" cy="78" rx="5.5" ry="7"/>'
-        + '<ellipse class="agi-ink" cx="72" cy="78" rx="5.5" ry="7"/>'
-        + '<circle class="agi-glint" cx="50" cy="75" r="2"/>'
-        + '<circle class="agi-glint" cx="74" cy="75" r="2"/></g>'
-        + '<ellipse class="agi-cheek" cx="39" cy="90" rx="5" ry="3"/>'
-        + '<ellipse class="agi-cheek" cx="81" cy="90" rx="5" ry="3"/>'
-        + '<path class="agi-smile" d="M52 91 Q60 98 68 91"/>'
-        // pointing arm (right), rotated from the shoulder to aim at things
-        + '<g class="agi-arm-r"><path class="agi-limb" d="M98 76 H118"/>'
-        + '<circle class="agi-hand" cx="119" cy="76" r="6"/></g>'
-        + '</g></svg>';
-    }
-
-    // Agi stands beside the tour card and points at what's highlighted.
-    function placeAgi(el, cl, ct, cw, ch) {
-      const a = tour.agi;
-      if (!a) return;
-      const W = 84, H = 98, s = W / 120;
-      const svg = a.querySelector('.agi');
-      let mx, my;
-      if (!el) {
-        mx = cl + cw / 2 - W / 2;
-        my = ct - H + 12;
-      } else if (cl - W - 8 >= 4) {
-        mx = cl - W - 8;
-        my = ct + 6;
-      } else if (cl + cw + W + 8 <= innerWidth - 4) {
-        mx = cl + cw + 8;
-        my = ct + 6;
-      } else {
-        // No room at the sides (phones): stand on the card's far side from
-        // the highlight, so Agi never covers what it's pointing at.
-        const tr = el.getBoundingClientRect();
-        const targetAbove = tr.top + tr.height / 2 < ct;
-        mx = cl + 14;
-        if (targetAbove && ct + ch + H + 4 <= innerHeight - 4) {
-          my = ct + ch + 4;
-        } else if (targetAbove) {
-          // No room below either: perch on the card's top-right corner.
-          mx = cl + cw - W - 6;
-          my = ct - H + 34;
-        } else {
-          my = ct - H + 12;
-        }
-      }
-      mx = Math.max(4, Math.min(innerWidth - W - 4, mx));
-      my = Math.max(4, Math.min(innerHeight - H - 4, my));
-      a.style.left = mx + 'px';
-      a.style.top = my + 'px';
-      svg.classList.toggle('waving', !el);
-      svg.classList.toggle('pointing', !!el);
-      if (!el) {
-        a.classList.remove('flip');
-        return;
-      }
-      // Aim at the nearest edge of the highlight, or its middle if Agi is on it.
-      const r = el.getBoundingClientRect();
-      const cx = mx + W / 2, cy = my + H / 2;
-      let tx = Math.max(r.left, Math.min(cx, r.right));
-      let ty = Math.max(r.top, Math.min(cy, r.bottom));
-      if (tx === cx && ty === cy) {
-        tx = r.left + r.width / 2;
-        ty = r.top + r.height / 2;
-      }
-      const flip = tx < cx - 4;
-      a.classList.toggle('flip', flip);
-      const sx = mx + (flip ? 22 : 98) * s, sy = my + 76 * s;
-      let ang = Math.atan2(ty - sy, tx - sx) * 180 / Math.PI;
-      if (flip) ang = 180 - ang;
-      if (ang > 180) ang -= 360;
-      ang = Math.max(-110, Math.min(110, ang));
-      svg.style.setProperty('--agi-aim', ang + 'deg');
-    }
-
-    function tourVisible(el) {
-      if (!el) return false;
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0
-        && getComputedStyle(el).visibility !== 'hidden';
-    }
-
+    // Runs once per account (the server remembers), and can be replayed from
+    // the menu. The tour itself is in static/tour.js.
     function tourAddTarget() {
       if (isMobileView()) return document.getElementById('fabAddTask');
       const side = document.getElementById('taskSidebar');
@@ -3356,22 +2976,10 @@
         ? document.getElementById('btnHamburger') : side;
     }
 
-    function tourDemo(kind) {
-      if (kind === 'drag') {
-        return '<div class="tour-demo"><div class="demo-cols">'
-          + '<span></span><span></span><span></span></div>'
-          + '<div class="demo-card"></div>'
-          + '<div class="demo-hand">👆</div></div>';
-      }
-      if (kind === 'checkin') {
-        return '<div class="tour-demo"><div class="demo-buttons"><b>Done</b>'
-          + '<b>Done late</b><b>Push</b><b>Missed</b></div></div>';
-      }
-      if (kind === 'score') {
-        return '<div class="tour-demo"><div class="demo-meter"><i></i></div>'
-          + '<div class="demo-legend">Do what you planned and it climbs</div></div>';
-      }
-      return '';
+    function tourSidebarPart(selector) {
+      const side = document.getElementById('taskSidebar');
+      if (isMobileView() || side.classList.contains('collapsed')) return null;
+      return side.querySelector(selector);
     }
 
     function buildTourSteps() {
@@ -3385,13 +2993,18 @@
         { target: tourAddTarget, title: 'Add a task',
           text: phone
             ? 'Tap + to add a task: pick the day, start time, how long it takes '
-              + 'and how important it is.'
+              + 'and how important it is. Switch to Meeting for calls and '
+              + 'appointments.'
             : 'Add tasks here: pick the day, start time, how long it takes and how '
               + 'important it is.' },
+        { target: () => tourSidebarPart('.kind-switch'),
+          title: 'Task or meeting?', demo: 'meeting',
+          text: 'Switch to Meeting for calls, appointments and anything with other '
+            + 'people. Meetings show in purple and never affect your score.' },
         { target: () => document.querySelector('.legend-bar'),
           title: 'Colour = priority',
-          text: 'Every task is coloured by its priority. You can rename priorities '
-            + 'and change their colours in Settings.' },
+          text: 'Every task is coloured by its priority, and meetings are purple. '
+            + 'You can rename priorities and change their colours in Settings.' },
         { target: () => document.getElementById('gridContainer'), title: 'Your week',
           text: 'Tasks sit here at their time. Tap one to see its details, mark it '
             + 'done, or change it.' },
@@ -3406,7 +3019,7 @@
               text: 'Tap a day here, or swipe left and right on the timetable.' }
           : { target: () => document.querySelector('.week-nav'), title: 'Change week',
               text: 'Look back at last week or plan ahead for the next one.' },
-        { target: () => (tourVisible(banner) ? banner : null), optional: true,
+        { target: () => (AgiTour.visible(banner) ? banner : null), optional: true,
           title: 'When a task’s time passes', demo: 'checkin',
           text: 'Agenndar asks what happened: done, done late, pushed to later, '
             + 'or missed. Answer honestly; that’s what makes your score mean '
@@ -3419,171 +3032,46 @@
         { target: () => document.querySelector('.metrics-bar'), title: 'Your counts',
           text: 'Tap Done, Undone, Pushed or Missed to see exactly which tasks '
             + 'are in each.' },
+        { target: () => document.querySelector('.meetings-btn'),
+          title: 'Your meetings',
+          text: 'See what’s coming up and mark whether each meeting happened. '
+            + 'A red badge means someone booked or cancelled.' },
+        { title: 'Let people book you', demo: 'slots',
+          text: 'Share your booking link and people pick a time when you’re free. '
+            + 'It lands on your timetable and you get a notification. Set it up '
+            + 'in Settings.' },
         { target: () => document.getElementById('profileHub'), title: 'Your menu',
-          text: 'Turn on reminders (a nudge 15 minutes before each task), switch to '
-            + 'dark mode, install Agenndar on your phone, export, and Settings.' },
+          text: 'Turn on reminders (a nudge 15 minutes before each task), dark '
+            + 'mode, install Agenndar on your phone, export, '
+            + (phone ? 'Meetings, ' : '') + 'and Settings.' },
         { title: "You're all set",
-          text: 'Add your first task to get going. You can replay this tour any time '
-            + 'from the menu.',
+          text: 'Add your first task to get going, or take a quick look around '
+            + 'Settings. You can replay this tour any time from the menu.',
           finish: true }
       ];
     }
 
     function startTour() {
-      closeTourParts();
       document.getElementById('profileDropdown').classList.remove('open');
       if (isMobileView()) document.body.classList.remove('sheet-open');
-      tour.steps = buildTourSteps();
-      tour.i = 0;
-      tour.blocker = document.createElement('div');
-      tour.blocker.className = 'tour-blocker';
-      tour.spot = document.createElement('div');
-      tour.spot.className = 'tour-spot centered';
-      tour.card = document.createElement('div');
-      tour.card.className = 'tour-card';
-      tour.card.setAttribute('role', 'dialog');
-      tour.card.setAttribute('aria-live', 'polite');
-      tour.agi = document.createElement('div');
-      tour.agi.className = 'tour-agi';
-      tour.agi.innerHTML = agiSvg();
-      document.body.append(tour.blocker, tour.spot, tour.card, tour.agi);
-      window.addEventListener('resize', placeTour);
-      window.addEventListener('scroll', placeTour, true);
-      document.addEventListener('keydown', tourKeys);
-      showTourStep(0);
-    }
-
-    function tourTarget(step) {
-      const el = step && step.target ? step.target() : null;
-      return tourVisible(el) ? el : null;
-    }
-
-    function showTourStep(i) {
-      // Skip steps whose part of the screen isn't showing (e.g. no check-in yet).
-      const dir = i >= tour.i ? 1 : -1;
-      while (i > 0 && i < tour.steps.length - 1 && tour.steps[i].target
-             && !tour.steps[i].optional && !tourTarget(tour.steps[i])) {
-        i += dir;
-      }
-      tour.i = i;
-      const step = tour.steps[i];
-      const shown = tour.steps.filter((s, k) =>
-        !s.target || s.optional || k === i || tourTarget(s));
-      const pos = shown.indexOf(step);
-      const last = i === tour.steps.length - 1;
-      tour.card.innerHTML =
-        '<div class="tour-step">' + (pos + 1) + ' of ' + shown.length + '</div>'
-        + '<h3>' + step.title + '</h3><p>' + step.text + '</p>' + tourDemo(step.demo)
-        + '<div class="tour-actions"><div class="tour-dots">'
-        + shown.map((s, k) => '<i class="' + (k === pos ? 'on' : '') + '"></i>')
-          .join('')
-        + '</div>'
-        + (last ? '' : '<button class="tour-btn link" data-t="skip">Skip</button>')
-        + (i > 0 && !last
-          ? '<button class="tour-btn" data-t="back">Back</button>' : '')
-        + '<button class="tour-btn primary" data-t="next">'
-        + (i === 0 ? 'Show me' : last ? 'Add my first task' : 'Next')
-        + '</button></div>';
-      tour.card.querySelectorAll('[data-t]').forEach(b => {
-        b.onclick = () => tourAction(b.dataset.t);
-      });
-      const demo = tour.card.querySelector('.tour-demo');
-      if (demo) demo.style.setProperty('--demo-w', demo.offsetWidth + 'px');
-      tour.card.classList.remove('enter');
-      void tour.card.offsetWidth;
-      tour.card.classList.add('enter');
-
-      const el = tourTarget(step);
-      if (el) {
-        const r = el.getBoundingClientRect();
-        if (r.top < 70 || r.bottom > innerHeight - 70) {
-          el.scrollIntoView({
-            block: r.height > innerHeight * 0.6 ? 'start' : 'center',
-            behavior: 'smooth'
+      AgiTour.start(buildTourSteps(), {
+        finishLabel: 'Add my first task',
+        altLabel: 'Show me Settings',
+        onEnd: (how) => {
+          // Remember on the server, so it doesn't run again on any device.
+          fetch('/api/tour/seen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: '{}'
+          }).catch(() => {}).finally(() => {
+            if (how === 'alt') location.href = '/settings?tour=1';
           });
+          if (how === 'finish') {
+            toggleSidebar(true);
+            setTimeout(() => document.getElementById('inputTitle').focus(), 350);
+          }
         }
-      }
-      placeTour();
-      setTimeout(placeTour, 400);
-      tour.card.querySelector('.tour-btn.primary').focus({ preventScroll: true });
-    }
-
-    function placeTour() {
-      if (!tour.card) return;
-      const step = tour.steps[tour.i];
-      const el = tourTarget(step);
-      const pad = 8, gap = 14;
-      const cw = tour.card.offsetWidth, ch = tour.card.offsetHeight;
-      if (!el) {
-        tour.spot.classList.add('centered');
-        Object.assign(tour.spot.style, {
-          top: innerHeight / 2 + 'px', left: innerWidth / 2 + 'px',
-          width: '0px', height: '0px'
-        });
-        tour.card.style.left = Math.max(16, (innerWidth - cw) / 2) + 'px';
-        // Leave room above the card for Agi.
-        const ctop = Math.max(110, (innerHeight - ch) / 2);
-        tour.card.style.top = ctop + 'px';
-        placeAgi(null, Math.max(16, (innerWidth - cw) / 2), ctop, cw, ch);
-        return;
-      }
-      tour.spot.classList.remove('centered');
-      const r = el.getBoundingClientRect();
-      const top = Math.max(4, r.top - pad);
-      const bottom = Math.min(innerHeight - 4, r.bottom + pad);
-      Object.assign(tour.spot.style, {
-        top: top + 'px', left: Math.max(4, r.left - pad) + 'px',
-        width: Math.min(innerWidth - 8, r.width + pad * 2) + 'px',
-        height: Math.max(0, bottom - top) + 'px'
       });
-      // Card below the highlight if it fits, else above, else over its bottom.
-      let cardTop;
-      if (bottom + gap + ch < innerHeight - 8) cardTop = bottom + gap;
-      else if (top - gap - ch > 8) cardTop = top - gap - ch;
-      else cardTop = innerHeight - ch - 16;
-      let cardLeft = r.left + r.width / 2 - cw / 2;
-      cardLeft = Math.max(16, Math.min(innerWidth - cw - 16, cardLeft));
-      tour.card.style.top = cardTop + 'px';
-      tour.card.style.left = cardLeft + 'px';
-      placeAgi(el, cardLeft, cardTop, cw, ch);
-    }
-
-    function tourAction(what) {
-      if (what === 'back') return showTourStep(Math.max(0, tour.i - 1));
-      if (what === 'next' && tour.i < tour.steps.length - 1) {
-        return showTourStep(tour.i + 1);
-      }
-      const finished = what === 'next';
-      endTour();
-      if (finished) {
-        toggleSidebar(true);
-        setTimeout(() => document.getElementById('inputTitle').focus(), 350);
-      }
-    }
-
-    function tourKeys(e) {
-      if (!tour.card) return;
-      if (e.key === 'Escape') endTour();
-      else if (e.key === 'ArrowRight') tourAction('next');
-      else if (e.key === 'ArrowLeft' && tour.i > 0) tourAction('back');
-    }
-
-    function closeTourParts() {
-      [tour.spot, tour.card, tour.blocker, tour.agi].forEach(n => n && n.remove());
-      tour.spot = tour.card = tour.blocker = tour.agi = null;
-      window.removeEventListener('resize', placeTour);
-      window.removeEventListener('scroll', placeTour, true);
-      document.removeEventListener('keydown', tourKeys);
-    }
-
-    function endTour() {
-      closeTourParts();
-      // Remember on the server, so it doesn't run again on any device.
-      fetch('/api/tour/seen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: '{}'
-      }).catch(() => {});
     }
 
     // First visit: start once nothing else (a popup or check-in) is open.

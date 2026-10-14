@@ -163,7 +163,9 @@ def tour_seen():
     if "user_id" not in session:
         return jsonify({"error": "Unauthorized"}), 401
     conn = get_db()
-    conn.execute("UPDATE users SET tour_seen = 1 WHERE id = ?", (session["user_id"],))
+    data = request.get_json(silent=True) or {}
+    column = "settings_tour_seen" if data.get("tour") == "settings" else "tour_seen"
+    conn.execute("UPDATE users SET %s = 1 WHERE id = ?" % column, (session["user_id"],))
     conn.commit()
     return jsonify({"status": "success"})
 

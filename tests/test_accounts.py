@@ -81,3 +81,16 @@ def test_a_google_only_account_deletes_with_a_confirmation(client, db, monkeypat
     ok = client.post("/api/account/delete", json={"confirm": True})
     assert ok.status_code == 200
     assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+
+
+def test_each_tour_shows_once(user):
+    assert "const SHOW_TOUR = true" in user.get("/dashboard").get_data(as_text=True)
+    assert "const SHOW_TOUR = true" in user.get("/settings").get_data(as_text=True)
+    user.post("/api/tour/seen", json={"tour": "settings"})
+    assert "const SHOW_TOUR = false" in user.get("/settings").get_data(as_text=True)
+    assert "const SHOW_TOUR = true" in user.get("/dashboard").get_data(as_text=True)
+    user.post("/api/tour/seen", json={})
+    assert "const SHOW_TOUR = false" in user.get("/dashboard").get_data(as_text=True)
+    # the dashboard tour can send you to the Settings one again
+    page = user.get("/settings?tour=1").get_data(as_text=True)
+    assert "const SHOW_TOUR = true" in page

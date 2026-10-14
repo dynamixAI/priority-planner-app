@@ -58,6 +58,7 @@ def init_db():
         "ALTER TABLE users ADD COLUMN has_password INTEGER DEFAULT 1;",
         # 1 once the user has seen (or skipped) the first-run tour.
         "ALTER TABLE users ADD COLUMN tour_seen INTEGER DEFAULT 0;",
+        "ALTER TABLE users ADD COLUMN settings_tour_seen INTEGER DEFAULT 0;",
         # When the user last opened their dashboard (for the admin stats).
         "ALTER TABLE users ADD COLUMN last_seen_at REAL DEFAULT 0;",
         # Booking settings

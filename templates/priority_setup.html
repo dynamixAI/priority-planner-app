@@ -7,6 +7,8 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
   <title>Settings | Agenndar</title>
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=2">
+  <script src="{{ url_for('static', filename='tour.js') }}?v=2"></script>
   <style>
     @font-face {
       font-family: 'Onest';
@@ -57,6 +59,11 @@
     button, input, select { font-family: inherit; }
     :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .card { width: 100%; max-width: 620px; margin: 0 auto; }
+    .settings-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .settings-head .preset-btn { margin-bottom: 0.4rem; }
     .top-back {
       color: var(--primary);
       text-decoration: none;
@@ -285,7 +292,11 @@
 <body>
   <div class="card">
     <a href="/dashboard" class="top-back">&larr; Dashboard</a>
-    <h2>Settings</h2>
+    <div class="settings-head">
+      <h2>Settings</h2>
+      <button type="button" class="preset-btn" onclick="startSettingsTour()">
+        👋 Show me around</button>
+    </div>
 
     <form method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -670,6 +681,92 @@
       `;
       list.appendChild(row);
     }
+  </script>
+  <script>
+    // Agi's tour of Settings. Runs on the first visit, or from the dashboard
+    // tour, and can be replayed with "Show me around".
+    const SHOW_TOUR = {{ 'true' if show_tour else 'false' }};
+
+    // A section's title down to the last thing before the next title.
+    function settingsSection(title) {
+      const t = [...document.querySelectorAll('.section-title')]
+        .find(el => el.textContent.trim() === title);
+      if (!t) return null;
+      let last = t, next = t.nextElementSibling;
+      while (next && !next.classList.contains('section-title')
+             && !next.classList.contains('btn-save')) {
+        last = next;
+        next = next.nextElementSibling;
+      }
+      return [t, last];
+    }
+
+    function settingsSpan(fromTitle, toTitle) {
+      const a = settingsSection(fromTitle), b = settingsSection(toTitle);
+      return a && b ? [a[0], b[1]] : null;
+    }
+
+    function startSettingsTour() {
+      const privacy = settingsSection('Privacy and notifications');
+      AgiTour.start([
+        { title: 'This is Settings', demo: 'rows',
+          text: "Here's where you shape Agenndar around your week. Let me show "
+            + "you what's here." },
+        { target: () => settingsSpan('Week starts on', 'Days shown on the timetable'),
+          title: 'Your week',
+          text: 'Pick the day your week starts on and which days show on your '
+            + 'timetable. Turn off days you never plan, like weekends.' },
+        { target: () => settingsSpan('Timetable layout (computer)', 'Time format'),
+          title: 'How it looks',
+          text: 'On a computer, show hours down the side or across the top. '
+            + 'Choose a 12 or 24-hour clock.' },
+        { target: () => settingsSection('Timezone'), title: 'Your timezone',
+          text: 'Due times, missed tasks and reminders all follow it. Clocks '
+            + 'going forward or back are handled for you.' },
+        { target: () => settingsSection('Overdue tasks'), title: 'Overdue tasks',
+          text: 'How long a task can keep being pushed before it starts costing '
+            + 'your score. Not sure? Pick Balanced.' },
+        { target: () => {
+            const p = settingsSection('Priorities');
+            return p ? [p[0], document.querySelector('.btn-save')] : null;
+          },
+          title: 'Your priorities',
+          text: 'Rename them, change their colours or add more. Then press Save '
+            + 'settings to keep any changes on this card.' },
+        { target: () => {
+            const b = settingsSection('Booking links');
+            return b ? b[0].parentElement : null;
+          },
+          title: 'Booking links', demo: 'slots',
+          text: 'Share a link so people can book meetings into your free time, '
+            + 'plus a separate link for an assistant. You choose your hours and '
+            + 'meeting lengths.' },
+        { target: () => privacy
+            ? [privacy[0].parentElement, document.querySelector('.danger-zone')]
+            : null,
+          title: 'Privacy and your account',
+          text: 'Read how your data is handled, or reset or delete your account. '
+            + "Those two can't be undone, so take care." },
+        { title: "That's Settings",
+          text: 'You can replay this any time with Show me around at the top.',
+          finish: true }
+      ], {
+        finishLabel: 'Got it',
+        onEnd: () => {
+          fetch('/api/tour/seen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json',
+                       'X-CSRFToken': document.querySelector(
+                         'meta[name="csrf-token"]').content },
+            body: JSON.stringify({ tour: 'settings' })
+          }).catch(() => {});
+          if (location.search) history.replaceState(null, '', location.pathname);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
+    }
+
+    if (SHOW_TOUR) setTimeout(startSettingsTour, 600);
   </script>
 </body>
 </html>
