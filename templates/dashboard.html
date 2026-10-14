@@ -6,8 +6,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=3">
-  <script src="{{ url_for('static', filename='tour.js') }}?v=3"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=5">
+  <script src="{{ url_for('static', filename='tour.js') }}?v=5"></script>
   <meta name="theme-color" content="#eef2f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0d1617" media="(prefers-color-scheme: dark)">
   <title>Agenndar</title>
@@ -3004,15 +3004,18 @@
       }
     }
 
-    // A pretend task card on the timetable. Never saved.
-    function tourGhost(track, hour) {
+    // A pretend task for the tour. Never saved.
+    function tourFakeTask(track, hour) {
       const prio = allPriorities[0] || {};
-      const holder = document.createElement('div');
-      holder.innerHTML = buildTaskCardHtml({
-        id: -1, title: 'Write report', detail: '', location: '',
+      return { id: -1, title: 'Write report', detail: '', location: '',
         date: track.dataset.date, time: String(hour).padStart(2, '0') + ':00',
         duration: '1 hour', duration_minutes: 60, priority_id: prio.id,
-        status: 'pending' }, null).trim();
+        status: 'pending' };
+    }
+
+    function tourGhost(track, hour) {
+      const holder = document.createElement('div');
+      holder.innerHTML = buildTaskCardHtml(tourFakeTask(track, hour), null).trim();
       const card = holder.firstElementChild;
       card.classList.add('tour-ghost');
       card.removeAttribute('onclick');
@@ -3021,8 +3024,16 @@
       return card;
     }
 
+    // The Actions part of the task details popup.
+    function tourDetailActions() {
+      return [...document.querySelectorAll('#detailBody .detail-row')]
+        .find(row => (row.querySelector('b') || {}).textContent === 'Actions');
+    }
+
     function tourRemoveGhosts() {
       document.querySelectorAll('.tour-ghost').forEach(c => c.remove());
+      const i = allUserTasks.findIndex(t => t.id === -1);
+      if (i >= 0) allUserTasks.splice(i, 1);
     }
 
     // Where the pretend card starts and where it gets dragged to.
@@ -3042,7 +3053,7 @@
                toHour: Math.min(22, from === to ? hour + 2 : hour + 1) };
     }
 
-    function buildTourSteps() {
+    function buildTourSteps(firstRun) {
       const phone = isMobileView();
       const banner = document.getElementById('reconcileBanner');
       return [
@@ -3069,12 +3080,17 @@
             await ctx.wait(380);
             ctx.place();
           } },
-        // Counted from the start: the step before opens the form it needs.
-        { target: tourKindTarget, counted: true, title: 'Task or meeting?',
+        // Shown even if the form isn't open yet; it opens it.
+        { target: tourKindTarget, optional: true, title: 'Task or meeting?',
           text: 'Switch to Meeting for calls, appointments and anything with other '
             + 'people. Meetings show in purple and never affect your score.',
           enter: async (ctx) => {
             const labels = document.querySelectorAll('.kind-switch label');
+            if (!tourSidebarOpen()) {
+              toggleSidebar(true);
+              if (!await ctx.wait(380)) return;
+              ctx.place();
+            }
             if (!await ctx.wait(500)) return;
             while (ctx.alive()) {
               await ctx.moveTo(labels[1], 700);
@@ -3107,9 +3123,44 @@
             const card = tourGhost(plan.from, plan.hour);
             await ctx.wait(500);
             await ctx.moveTo(card, 800);
-            await ctx.tap();
           },
           leave: tourRemoveGhosts },
+        { target: () => {
+            const box = document.querySelector('#detailModal .modal-content');
+            if (!AgiTour.visible(box)) return document.getElementById('gridContainer');
+            return phone ? tourDetailActions() || box : box;
+          },
+          side: true, title: 'Open a task',
+          text: 'Tap any task to see its details and notes. From here you can mark '
+            + 'it done, move it, change its priority or delete it.',
+          enter: async (ctx) => {
+            if (!await ctx.wait(500)) return;
+            const plan = tourGhostPlan();
+            if (!plan) return;
+            const card = tourGhost(plan.from, plan.hour);
+            allUserTasks.push(Object.assign(tourFakeTask(plan.from, plan.hour), {
+              detail: 'Draft the summary and send it to the team.',
+              location: 'Office' }));
+            await ctx.moveTo(card, 800);
+            await ctx.tap();
+            if (!ctx.alive()) return;
+            showTaskDetail(-1);
+            if (phone && tourDetailActions()) {
+              tourDetailActions().scrollIntoView({ block: 'start' });
+            }
+            ctx.place();
+            if (!await ctx.wait(900)) return;
+            const actions = [...document.querySelectorAll('#detailBody .btn-create')]
+              .filter(b => AgiTour.visible(b));
+            for (const b of actions.slice(0, 3)) {
+              if (!await ctx.moveTo(b, 550)) return;
+              if (!await ctx.wait(350)) return;
+            }
+          },
+          leave: () => {
+            closeDetailModal();
+            tourRemoveGhosts();
+          } },
         { target: () => document.getElementById('gridContainer'),
           title: 'Plans changed? Move it',
           text: phone
@@ -3237,19 +3288,24 @@
             }
           },
           leave: () => document.getElementById('profileDropdown').classList.remove('open') },
-        { title: "You're all set",
-          text: 'Add your first task to get going, or take a quick look around '
-            + 'Settings. You can replay this tour any time from the menu.',
-          finish: true }
+        firstRun
+          ? { title: "You're all set",
+              text: 'Add your first task to get going, or take a quick look around '
+                + 'Settings. You can replay this tour any time from the menu.',
+              finish: true }
+          : { title: "That's the tour",
+              text: 'You can replay it any time from the menu.', finish: true }
       ];
     }
 
-    function startTour() {
+    // firstRun: the automatic first visit, which ends with next steps.
+    // From the menu it's a replay and just ends.
+    function startTour(firstRun) {
       document.getElementById('profileDropdown').classList.remove('open');
       if (isMobileView()) document.body.classList.remove('sheet-open');
-      AgiTour.start(buildTourSteps(), {
-        finishLabel: 'Add my first task',
-        altLabel: 'Show me Settings',
+      AgiTour.start(buildTourSteps(firstRun), {
+        finishLabel: firstRun ? 'Add my first task' : 'Done',
+        altLabel: firstRun ? 'Show me Settings' : '',
         onEnd: (how) => {
           // Remember on the server, so it doesn't run again on any device.
           fetch('/api/tour/seen', {
@@ -3260,7 +3316,7 @@
             if (how === 'alt') location.href = '/settings?tour=1';
           });
           if (how !== 'finish' && isMobileView()) toggleSidebar(false);
-          if (how === 'finish') {
+          if (how === 'finish' && firstRun) {
             toggleSidebar(true);
             setTimeout(() => document.getElementById('inputTitle').focus(), 350);
           }
@@ -3274,7 +3330,7 @@
       const tryStart = () => {
         const busy = [...document.querySelectorAll('.modal-overlay')]
           .some(m => getComputedStyle(m).display !== 'none');
-        if (!busy || waited > 30000) startTour();
+        if (!busy || waited > 30000) startTour(true);
         else { waited += 1000; setTimeout(tryStart, 1000); }
       };
       setTimeout(tryStart, 900);

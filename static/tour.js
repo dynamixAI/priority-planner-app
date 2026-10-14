@@ -1,8 +1,9 @@
 // Agi's guided tour, used on the dashboard and Settings.
 // AgiTour.start(steps, options) highlights one part of the page at a time.
-// A step is { title, text, target, optional, counted, demo, finish, enter,
-// leave }. target returns an element, or a [first, last] pair to highlight
-// both and what's between. enter(ctx) can act things out on the page with a
+// A step is { title, text, target, optional, counted, side, demo, finish,
+// enter, leave }. target returns an element, or a [first, last] pair to
+// highlight both and what's between. side puts the card beside the target
+// when there's room. enter(ctx) can act things out on the page with a
 // pointer hand; leave() puts the page back.
 (function () {
   const tour = { steps: [], i: 0, spot: null, card: null, blocker: null,
@@ -66,7 +67,7 @@
     if (!el) {
       mx = cl + cw / 2 - W / 2;
       my = ct - H + 12;
-    } else if (cl - W - 8 >= 4) {
+    } else if (cl - W - 8 >= 4 && !(rectOf(el).right <= cl)) {
       mx = cl - W - 8;
       my = ct + 6;
     } else if (cl + cw + W + 8 <= innerWidth - 4) {
@@ -237,7 +238,9 @@
     const last = i === tour.steps.length - 1;
     const o = tour.opts;
     tour.card.innerHTML =
-      '<div class="tour-step">' + (pos + 1) + ' of ' + shown.length + '</div>'
+      '<button class="tour-x" data-t="skip" aria-label="Close the tour">'
+      + '&#x2715;</button>'
+      + '<div class="tour-step">' + (pos + 1) + ' of ' + shown.length + '</div>'
       + '<h3>' + step.title + '</h3><p>' + step.text + '</p>' + demoHtml(step.demo)
       + '<div class="tour-actions"><div class="tour-dots">'
       + (last && o.altLabel ? '' : shown.map((s, k) =>
@@ -305,12 +308,21 @@
       height: Math.max(0, bottom - top) + 'px'
     });
     // Card below the highlight if it fits, else above, else over its bottom.
-    let cardTop;
-    if (bottom + gap + ch < innerHeight - 8) cardTop = bottom + gap;
-    else if (top - gap - ch > 8) cardTop = top - gap - ch;
-    else cardTop = innerHeight - ch - 16;
-    let cardLeft = r.left + r.width / 2 - cw / 2;
-    cardLeft = Math.max(16, Math.min(innerWidth - cw - 16, cardLeft));
+    let cardTop, cardLeft;
+    const step = tour.steps[tour.i];
+    const besideRight = r.right + gap + cw < innerWidth - 8;
+    const besideLeft = r.left - gap - cw > 8;
+    if (step.side && (besideRight || besideLeft)) {
+      cardLeft = besideRight ? r.right + gap : r.left - gap - cw;
+      cardTop = Math.max(8, Math.min(innerHeight - ch - 8,
+                                     r.top + r.height / 2 - ch / 2));
+    } else {
+      if (bottom + gap + ch < innerHeight - 8) cardTop = bottom + gap;
+      else if (top - gap - ch > 8) cardTop = top - gap - ch;
+      else cardTop = innerHeight - ch - 16;
+      cardLeft = r.left + r.width / 2 - cw / 2;
+      cardLeft = Math.max(16, Math.min(innerWidth - cw - 16, cardLeft));
+    }
     tour.card.style.top = cardTop + 'px';
     tour.card.style.left = cardLeft + 'px';
     placeAgi(el, cardLeft, cardTop, cw, ch);

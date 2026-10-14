@@ -473,3 +473,17 @@
 @media (prefers-reduced-motion: reduce) {
   .tour-hand { transition: none !important; }
 }
+.tour-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--metric-muted, var(--subtext));
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.tour-x:hover { background: var(--border); color: var(--text); }
